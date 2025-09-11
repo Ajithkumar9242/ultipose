@@ -1,7 +1,7 @@
 {
   "hosting": {
     "public": "dist",
-    "site": "ulti-pos",
+    "site": "ultipos-order",
     "ignore": [
       "firebase.json",
       "**/.*",
