@@ -21,14 +21,14 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
 
   const calculateTotal = () => {
     const basePrice = selectedVariant?.price || item.price
-    const addOnsPrice = selectedAddOns.reduce(
+    const addOnsPrice = (selectedAddOns || []).reduce(
       (sum, addon) => sum + addon.price,
       0
     )
     return (basePrice + addOnsPrice) * quantity
   }
 
-  const handleAddToCart = () => {
+  const handleAddToCartClick = () => {
     onAddToCart(
       item,
       quantity,
@@ -80,26 +80,30 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
               <div className="flex items-center gap-4 mb-3">
                 <div className="flex items-center gap-1">
                   <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <span className="text-sm font-medium">{item.rating}</span>
+                  <span className="text-sm font-medium">
+                    {item.rating ?? 0}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Clock className="w-4 h-4 text-gray-500" />
                   <span className="text-sm text-gray-600">
-                    {item.preparationTime}
+                    {item.preparationTime || "—"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Users className="w-4 h-4 text-gray-500" />
                   <span className="text-sm text-gray-600">
-                    Serves {item.serves}
+                    Serves {item.serves ?? 1}
                   </span>
                 </div>
               </div>
 
-              <p className="text-gray-600 mb-4">{item.description}</p>
+              <p className="text-gray-600 mb-4">
+                {item.description || "No description available."}
+              </p>
 
               <div className="flex flex-wrap gap-1">
-                {item.tags.map(tag => (
+                {(item.tags || []).map(tag => (
                   <span
                     key={tag}
                     className={`px-2 py-1 text-xs rounded-full ${
@@ -120,10 +124,14 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
           {/* Ingredients */}
           <div className="mb-6">
             <h4 className="font-semibold mb-2">Ingredients</h4>
-            <p className="text-gray-600">{item.ingredients.join(", ")}</p>
+            <p className="text-gray-600">
+              {(item.ingredients || []).length
+                ? (item.ingredients || []).join(", ")
+                : "Not specified."}
+            </p>
           </div>
 
-          {/* Variants */}
+          {/* Variants – will be hidden if there are no variants */}
           {item.variants && item.variants.length > 0 && (
             <div className="mb-6">
               <h4 className="font-semibold mb-3">Choose Size</h4>
@@ -150,7 +158,7 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
             </div>
           )}
 
-          {/* Add-ons */}
+          {/* Add-ons – NOW ONLY FROM POS JSON (modifierGroups → addOns) */}
           {item.addOns && item.addOns.length > 0 && (
             <div className="mb-6">
               <h4 className="font-semibold mb-3">Add-ons</h4>
@@ -225,7 +233,7 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
             </div>
 
             <Button
-              onClick={handleAddToCart}
+              onClick={handleAddToCartClick}
               className="bg-orange-500 hover:bg-orange-600 text-white px-8"
             >
               Add to Cart - ₹{calculateTotal()}
