@@ -1,6 +1,7 @@
 "use client"
 import { X, Plus, Minus, ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { formatPriceAUD } from "../utils/currency"   // ⬅️ ADD THIS
 
 export function CartSidebar({
   isOpen,
@@ -39,9 +40,9 @@ export function CartSidebar({
               {cartItems.map(item => {
                 const basePrice = item.selectedVariant?.price || item.price
                 const addOnsPrice = (item.selectedAddOns || []).reduce(
-  (sum, addon) => sum + addon.price,
-  0
-);
+                  (sum, addon) => sum + addon.price,
+                  0
+                )
 
                 const itemTotal = (basePrice + addOnsPrice) * item.quantity
 
@@ -102,19 +103,19 @@ export function CartSidebar({
 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                      <Button
-  variant="outline"
-  size="sm"
-  onClick={() => {
-    if (item.quantity <= 1) {
-      onRemoveItem(item.id);
-    } else {
-      onUpdateQuantity(item.id, item.quantity - 1);
-    }
-  }}
->
-  <Minus className="w-3 h-3" />
-</Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (item.quantity <= 1) {
+                              onRemoveItem(item.id)
+                            } else {
+                              onUpdateQuantity(item.id, item.quantity - 1)
+                            }
+                          }}
+                        >
+                          <Minus className="w-3 h-3" />
+                        </Button>
 
                         <span className="w-8 text-center">{item.quantity}</span>
                         <Button
@@ -127,7 +128,9 @@ export function CartSidebar({
                           <Plus className="w-3 h-3" />
                         </Button>
                       </div>
-                      <span className="font-semibold">₹{itemTotal}</span>
+                      <span className="font-semibold">
+                        {formatPriceAUD(itemTotal)}
+                      </span>
                     </div>
                   </div>
                 )
@@ -141,7 +144,9 @@ export function CartSidebar({
           {cartItems.length > 0 ? (
             <>
               <div className="flex justify-between items-center mb-4">
-                <span className="text-lg font-semibold">Total: ₹{total}</span>
+                <span className="text-lg font-semibold">
+                  Total: {formatPriceAUD(total)}
+                </span>
               </div>
               <Button
                 onClick={onCheckout}

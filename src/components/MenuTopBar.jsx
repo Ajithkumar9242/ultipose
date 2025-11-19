@@ -2,11 +2,17 @@
 "use client"
 
 import { useState } from "react"
-import { Search, ShoppingCart, Menu, X } from "lucide-react"
+import {
+  Search,
+  ShoppingCart,
+  Menu,
+  X,
+  SlidersHorizontal    // ⬅️ NEW: filter icon
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FilterPanel } from "./FilterPanel"
-import { DeliverySelector } from "@/components/DeliverySelector "
+import { DeliverySelector } from "./DeliverySelector "
 
 export function MenuTopBar({
   filters,
@@ -18,15 +24,24 @@ export function MenuTopBar({
   setSelectedCategory,
   categories,
   cartItemsCount,
-  onOpenCart
+  onOpenCart,
+  storeInfo        // store meta from API
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false) // ⬅️ NEW
+
+  // derive values from storeInfo with fallback
+  const storeName = storeInfo?.name || "Restaurant"
+  const storeCode = storeInfo?.code || "Store code"
+  const storePhone = storeInfo?.phoneNo
+  const logoLetter = storeName.charAt(0).toUpperCase()
 
   return (
     <>
       {/* Header (top bar) */}
       <header className="fixed top-0 left-0 right-0 w-full z-50 bg-white border-b border-gray-200 px-4 py-3 lg:px-6 lg:py-4">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">          {/* Mobile Menu Button */}
+        <div className="flex items-center justify-between max-w-7xl mx-auto">
+          {/* Mobile Menu Button */}
           <div className="lg:hidden">
             <Button
               variant="ghost"
@@ -41,15 +56,16 @@ export function MenuTopBar({
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 lg:w-12 lg:h-12 bg-orange-100 rounded-lg flex items-center justify-center">
               <span className="text-orange-600 font-bold text-base lg:text-lg">
-                R
+                {logoLetter}
               </span>
             </div>
             <div className="hidden sm:block">
               <h1 className="text-lg lg:text-xl font-semibold text-gray-900">
-                React Restaurant
+                {storeName}
               </h1>
               <p className="text-xs lg:text-sm text-gray-600">
-                React Restaurant - BrookeField
+                {storeCode}
+                {storePhone ? ` • ${storePhone}` : ""}
               </p>
             </div>
           </div>
@@ -120,22 +136,36 @@ export function MenuTopBar({
           </div>
         </div>
 
-        {/* Mobile Search Bar */}
+        {/* Mobile Search Bar + Filter Icon */}
         <div className="mt-3 lg:hidden">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Search for items..."
-              className="pl-10 bg-gray-50 border-gray-200"
-              value={filters.searchQuery}
-              onChange={e =>
-                setFilters({ ...filters, searchQuery: e.target.value })
-              }
-            />
+          <div className="flex items-center gap-2">
+            {/* search ~80–90% width */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                placeholder="Search for items..."
+                className="pl-10 bg-gray-50 border-gray-200"
+                value={filters.searchQuery}
+                onChange={e =>
+                  setFilters({ ...filters, searchQuery: e.target.value })
+                }
+              />
+            </div>
+
+            {/* filter icon button */}
+            <button
+              onClick={() => setIsMobileFilterOpen(true)}
+              className="flex items-center justify-center w-10 h-10 border border-gray-200 rounded-lg bg-white active:scale-95"
+            >
+              <SlidersHorizontal className="w-5 h-5 text-gray-700" />
+            </button>
           </div>
         </div>
       </header>
-<div className="h-[120px] lg:h-[80px] w-full" />
+
+      {/* spacing below fixed header */}
+      <div className="h-[120px] lg:h-[80px] w-full" />
+
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 lg:hidden">
@@ -179,7 +209,38 @@ export function MenuTopBar({
         </div>
       )}
 
-      {/* Delivery Info (kept together with top bar as you asked) */}
+      {/* Mobile Filter Bottom Sheet */}
+      {isMobileFilterOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden bg-black/40">
+          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4 max-h-[70vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold">Filters</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsMobileFilterOpen(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <FilterPanel
+              filters={filters}
+              onFiltersChange={setFilters}
+              categories={categories}
+            />
+            <div className="mt-4">
+              <Button
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                onClick={() => setIsMobileFilterOpen(false)}
+              >
+                Apply Filters
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Info */}
       <DeliverySelector />
     </>
   )

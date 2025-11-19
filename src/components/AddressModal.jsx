@@ -1,3 +1,4 @@
+// src/components/AddressModal.jsx
 "use client"
 import { useState } from "react"
 import { X, MapPin, Home, Briefcase, Plus, Check } from "lucide-react"
@@ -203,7 +204,7 @@ export function AddressModal({
                   {["home", "work", "other"].map(type => (
                     <button
                       key={type}
-                      onClick={() => setFormData({ ...formData, type: type })}
+                      onClick={() => setFormData({ ...formData, type })}
                       className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
                         formData.type === type
                           ? "border-orange-500 bg-orange-50 text-orange-600"

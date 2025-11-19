@@ -1,18 +1,23 @@
 "use client"
 import { useState, useMemo, useEffect } from "react"
-import { Search, MapPin, ShoppingCart, Menu, X } from "lucide-react"
+import { useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "react-hot-toast"
+import { MenuSkeleton } from "../components/MenuSkeleton"
+import { MenuSidebarSkeleton } from "../components/MenuSidebarSkeleton"
+import { formatPriceAUD } from "../utils/currency"
+import { setLocation } from "../redux/locationSlice"
+import { setUserDetails as setUserDetailsRedux } from "../redux/userSlice"
+import { useNavigate } from "react-router-dom"
 
 import { ItemDetailsModal } from "../components/ItemDetailsModal"
 import { CartSidebar } from "../components/CartSidebar"
 import { AuthModal } from "../components/AuthModal"
 import { OrderPage } from "../components/OrderPage"
-import { FilterPanel } from "../components/FilterPanel"
 import { mapPosMenuToClient } from "../data/posMapper"
 import { MenuCategorySidebar } from "../components/MenuCategorySidebar"
-import { MenuTopBar } from "../components/MenuTopBar"  // ⬅️ NEW
+import { MenuTopBar } from "../components/MenuTopBar"
 
 import { useSelector, useDispatch } from "react-redux"
 import { OrderConfirmation } from "../components/OrderConfirmation"
@@ -23,11 +28,18 @@ import {
   clearCart,
   setIsOpen
 } from "../redux/store"
+import NotFound from "./NotFound"
 
-const POS_API_URL =
-  "https://devapi.ulti-pos.com/ultipos-online/ultipos-test-store-1"
+// 🔹 BASE URL & default store from env
+const POS_API_BASE = import.meta.env.VITE_POS_API_BASE
+const DEFAULT_STORE_CODE =
+  import.meta.env.VITE_DEFAULT_STORE_CODE || "ultipos-test-store-1"
 
 export default function Menuu() {
+  const { storeCode } = useParams()
+  const effectiveStoreCode = storeCode || DEFAULT_STORE_CODE
+  const POS_API_URL = `${POS_API_BASE}/${effectiveStoreCode}`
+
   const [vegOnly, setVegOnly] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [isAuthOpen, setIsAuthOpen] = useState(false)
@@ -48,19 +60,102 @@ export default function Menuu() {
   const [foodItems, setFoodItems] = useState([])
   const [menuCategories, setMenuCategories] = useState(["Menu"])
   const [loading, setLoading] = useState(true)
+  const [storeNotFound, setStoreNotFound] = useState(false)
+
+  const navigate = useNavigate()
+
+
+  // 🔹 NEW: store info for logo/name/id
+  const [storeInfo, setStoreInfo] = useState(null)
+
+  // 🔹 NEW: control our “please share location” banner
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false)
 
   const dispatch = useDispatch()
   const cartItems = useSelector(state => state.cart.items)
   const isCartOpen = useSelector(state => state.cart.isOpen)
+ const location = useSelector(state => state.location)
+const savedUser = useSelector(state => state.user.details) // ⬅️ NEW
 
+
+  // 🔹 Decide when to show the location banner
+  useEffect(() => {
+    // if no location stored, ask user nicely
+    if (!location?.data) {
+      setShowLocationPrompt(true)
+    }
+  }, [location?.data])
+
+  // 🔹 Called when user clicks "Use my location" in the banner
+  const handleRequestLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported by your browser.")
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async position => {
+        const { latitude, longitude } = position.coords
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          )
+          const data = await response.json()
+          const address = data.display_name
+
+          dispatch(
+            setLocation({
+              type: "delivery",
+              data: address
+            })
+          )
+          setShowLocationPrompt(false)
+        } catch (err) {
+          console.error("Error reverse geocoding:", err)
+          toast.error("Couldn't fetch your address.")
+        }
+      },
+      error => {
+        console.log("Location denied or failed:", error)
+        // This is where Chrome shows "Location blocked" etc.
+        toast.error(
+          "Location access was blocked. Please allow location in your browser settings and try again."
+        )
+      }
+    )
+  }
+
+  // 🔹 User chooses to skip location for now
+  const handleSkipLocation = () => {
+    setShowLocationPrompt(false)
+  }
+
+  // 🔹 Fetch menu + store info
   useEffect(() => {
     const fetchMenu = async () => {
       try {
+        setLoading(true)
+        setStoreNotFound(false)
+
         const res = await fetch(POS_API_URL)
+
+        if (res.status === 404) {
+          setStoreNotFound(true)
+          setFoodItems([])
+          setMenuCategories(["Menu"])
+          setStoreInfo(null)
+          return
+        }
+
         if (!res.ok) {
           throw new Error("Failed to fetch menu")
         }
+
         const data = await res.json()
+
+        // store meta from API
+        setStoreInfo(data.store || null)
+
         const mapped = mapPosMenuToClient(data)
         setFoodItems(mapped.foodItems)
         setMenuCategories(mapped.menuCategories)
@@ -73,7 +168,7 @@ export default function Menuu() {
     }
 
     fetchMenu()
-  }, [])
+  }, [POS_API_URL])
 
   const getCartItemsCount = () =>
     cartItems.reduce((total, item) => total + (item.quantity || 1), 0)
@@ -92,10 +187,8 @@ export default function Menuu() {
     return foodItems.filter(item => {
       if (vegOnly && !item.isVeg) return false
       if (filters.category && item.category !== filters.category) return false
-
       if (selectedCategory !== "Menu" && item.category !== selectedCategory)
         return false
-
       if (filters.isVeg !== null && item.isVeg !== filters.isVeg) return false
       if (
         item.price < filters.priceRange[0] ||
@@ -128,26 +221,38 @@ export default function Menuu() {
         specialInstructions
       })
     )
-    toast.success(`${item.name} added to cart`)
   }
 
   const handleItemClick = item => {
     setSelectedItem(item)
   }
 
-  const handleCheckout = () => {
-    dispatch(setIsOpen(false))
+const handleCheckout = () => {
+  dispatch(setIsOpen(false))
+
+  if (savedUser && savedUser.email && savedUser.phone) {
+    // ✅ User already known → skip AuthModal
+    setUserDetails(savedUser)
+    setShowOrderPage(true)
+    navigate("/checkout")   
+  } else {
+    // ❌ No saved user → ask once
     setIsAuthOpen(true)
   }
+}
+
 
   const handleBackToHome = () => {
     setOrderConfirmation(null)
   }
 
-  const handleAuthComplete = details => {
-    setUserDetails(details)
-    setShowOrderPage(true)
-  }
+const handleAuthComplete = details => {
+  setUserDetails(details)
+  dispatch(setUserDetailsRedux(details))
+  setIsAuthOpen(false)
+  navigate("/checkout")            // ✅ after entering details, go to /checkout
+}
+
 
   const handlePlaceOrder = orderDetails => {
     const completeOrderDetails = {
@@ -157,40 +262,59 @@ export default function Menuu() {
     }
     setOrderConfirmation(completeOrderDetails)
     dispatch(clearCart())
-
     setShowOrderPage(false)
     setUserDetails(null)
     toast.success(`Order placed successfully! ID: ${orderDetails.orderId}`)
-
     localStorage.removeItem("preparationInstructions")
   }
 
   const categories = [...new Set(foodItems.map(item => item.category))]
 
-  if (orderConfirmation) {
-    return (
-      <OrderConfirmation
-        orderDetails={orderConfirmation}
-        onBackToHome={handleBackToHome}
-      />
-    )
+  if (storeNotFound) {
+    return <NotFound />
   }
 
-  if (showOrderPage && userDetails) {
-    return (
-      <OrderPage
-        cartItems={cartItems}
-        userDetails={userDetails}
-        onBack={() => setShowOrderPage(false)}
-        onPlaceOrder={handlePlaceOrder}
-        total={getCartTotal()}
-      />
-    )
-  }
+  // if (orderConfirmation) {
+  //   return (
+  //     <OrderConfirmation
+  //       orderDetails={orderConfirmation}
+  //       onBackToHome={handleBackToHome}
+  //     />
+  //   )
+  // }
+
+ 
 
   return (
     <div className="min-h-screen bg-white">
-      {/* 🔹 Top bar + mobile menu + DeliverySelector in one component */}
+      {/* 🔹 Location banner shown when user first lands on store page */}
+      {showLocationPrompt && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-gray-900 text-white px-4 py-3">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm">
+              We’d like to use your location to show delivery options for your area.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-gray-400 text-gray-100"
+                onClick={handleSkipLocation}
+              >
+                Not now
+              </Button>
+              <Button
+                size="sm"
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+                onClick={handleRequestLocation}
+              >
+                Allow location
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <MenuTopBar
         filters={filters}
         setFilters={setFilters}
@@ -202,14 +326,19 @@ export default function Menuu() {
         categories={categories}
         cartItemsCount={getCartItemsCount()}
         onOpenCart={() => dispatch(setIsOpen(true))}
+        storeInfo={storeInfo}
       />
 
       <div className="flex max-w-7xl mx-auto">
-        <MenuCategorySidebar
-          menuCategories={menuCategories}
-          selectedCategory={selectedCategory}
-          onSelectCategory={setSelectedCategory}
-        />
+        {loading ? (
+          <MenuSidebarSkeleton />
+        ) : (
+          <MenuCategorySidebar
+            menuCategories={menuCategories}
+            selectedCategory={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+          />
+        )}
 
         <main className="flex-1 p-4 lg:p-6">
           <div className="mb-6">
@@ -217,11 +346,15 @@ export default function Menuu() {
               {selectedCategory === "Menu" ? "All Items" : selectedCategory}
             </h2>
             <p className="text-sm lg:text-base text-gray-600">
-              {loading ? "Loading items..." : `${filteredItems.length} Items`}
+              {loading
+                ? "Finding the best dishes for you..."
+                : `${filteredItems.length} Items`}
             </p>
           </div>
 
-          {!loading && (
+          {loading ? (
+            <MenuSkeleton />
+          ) : (
             <>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
                 {filteredItems.map(item => (
@@ -252,7 +385,7 @@ export default function Menuu() {
                           {item.name}
                         </h3>
                         <p className="text-base lg:text-lg font-semibold text-gray-900 mb-3">
-                          ₹{item.price}
+                          {formatPriceAUD(item.price)}
                         </p>
 
                         <div className="flex flex-wrap gap-1 mb-3">
@@ -349,6 +482,7 @@ export default function Menuu() {
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         onAuthComplete={handleAuthComplete}
+        initialDetails={savedUser} 
       />
     </div>
   )

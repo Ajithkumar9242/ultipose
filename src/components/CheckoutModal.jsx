@@ -3,12 +3,13 @@ import { useState } from "react"
 import { X, MapPin, CreditCard, Banknote } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { formatPriceAUD } from "../utils/currency"   // ⬅️ ADD THIS
 
 export function CheckoutModal({
   isOpen,
   onClose,
   cartItems,
-  total,
+  total,          // total in cents
   onPlaceOrder
 }) {
   const [step, setStep] = useState(1) // 1: Address, 2: Payment, 3: Confirmation
@@ -25,8 +26,9 @@ export function CheckoutModal({
 
   if (!isOpen) return null
 
-  const deliveryFee = 40
-  const taxes = Math.round(total * 0.05) // 5% tax
+  // values in cents (400 = AUD 4.00)
+  const deliveryFee = 400
+  const taxes = Math.round(total * 0.05) // 5% tax on subtotal (still cents)
   const finalTotal = total + deliveryFee + taxes
 
   const handlePlaceOrder = async () => {
@@ -150,19 +152,19 @@ export function CheckoutModal({
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Subtotal ({cartItems.length} items)</span>
-                    <span>₹{total}</span>
+                    <span>{formatPriceAUD(total)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Delivery Fee</span>
-                    <span>₹{deliveryFee}</span>
+                    <span>{formatPriceAUD(deliveryFee)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Taxes & Charges</span>
-                    <span>₹{taxes}</span>
+                    <span>{formatPriceAUD(taxes)}</span>
                   </div>
                   <div className="border-t pt-2 flex justify-between font-semibold">
                     <span>Total</span>
-                    <span>₹{finalTotal}</span>
+                    <span>{formatPriceAUD(finalTotal)}</span>
                   </div>
                 </div>
               </div>
@@ -180,7 +182,7 @@ export function CheckoutModal({
                       onChange={e => setPaymentMethod(e.target.value)}
                     />
                     <CreditCard className="w-5 h-5 text-blue-500" />
-                    <span>Online Payment (UPI/Card/Wallet)</span>
+                    <span>Online Payment (Card/Wallet)</span>
                   </label>
 
                   <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
@@ -212,7 +214,7 @@ export function CheckoutModal({
                 >
                   {isProcessing
                     ? "Processing..."
-                    : `Place Order - ₹${finalTotal}`}
+                    : `Place Order - ${formatPriceAUD(finalTotal)}`}
                 </Button>
               </div>
             </div>

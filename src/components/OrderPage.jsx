@@ -1,3 +1,4 @@
+// src/components/OrderPage.jsx
 "use client"
 import { useState } from "react"
 import {
@@ -12,29 +13,21 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CouponModal } from "./CouponModal"
 import { AddressModal } from "./AddressModal"
-import { useSelector } from "react-redux";
-import { useDispatch } from "react-redux";
+import { useSelector, useDispatch } from "react-redux"
 import { setLocation } from "@/redux/locationSlice"
-
+import { formatPriceAUD } from "../utils/currency" // AUD formatter
 
 export function OrderPage({
   cartItems,
-  userDetails,
+  userDetails, // comes from AuthModal
   onBack,
   onPlaceOrder,
   total
 }) {
-  const [deliveryAddress, setDeliveryAddress] = useState(
-    "Cluster_dodda Nekkundi 2 Benoxa Tower, SHRADDH..."
-  )
   const [appliedCoupon, setAppliedCoupon] = useState(null)
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false)
-const [preparationInstructions, setPreparationInstructions] = useState(
-  () => localStorage.getItem("preparationInstructions") || ""
-);
 
-  const [showInstructionsInput, setShowInstructionsInput] = useState(false)
-const dispatch = useDispatch();
+  const dispatch = useDispatch()
 
   const [addresses, setAddresses] = useState([
     {
@@ -50,36 +43,56 @@ const dispatch = useDispatch();
   ])
   const [selectedAddress, setSelectedAddress] = useState(addresses[0])
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false)
-  const location = useSelector(state => state.location);
-const [items, setItems] = useState(cartItems);
 
-const handleUpdateQuantity = (itemId, newQuantity) => {
-  if (newQuantity < 1) return; // prevent 0 quantity
+  const location = useSelector(state => state.location)
+  const savedUser = useSelector(state => state.user.details)
 
-  setItems(prevItems =>
-    prevItems.map(item =>
-      item.id === itemId
-        ? { ...item, quantity: newQuantity }
-        : item
+  // Prefer local userDetails (from this session), fallback to Redux
+  const effectiveUser = userDetails || savedUser || {}
+
+  // Local copy of cart items (so we can change qty / notes)
+  const [items, setItems] = useState(cartItems)
+
+  // Per-item note drafts (id -> string), persisted in localStorage
+  const [noteDrafts, setNoteDrafts] = useState(() => {
+    try {
+      const saved = localStorage.getItem("itemNotes")
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
+  // Which item currently has the note input open
+  const [editingNoteId, setEditingNoteId] = useState(null)
+
+  const handleUpdateQuantity = (itemId, newQuantity) => {
+    if (newQuantity < 1) return // prevent 0 quantity
+
+    setItems(prevItems =>
+      prevItems.map(item =>
+        item.id === itemId ? { ...item, quantity: newQuantity } : item
+      )
     )
-  );
-};
+  }
 
-const computedTotal = items.reduce((sum, item) => {
-  const base = item.selectedVariant?.price || item.foodItem?.price || 0;
-  const addOns = item.selectedAddOns.reduce((s, a) => s + a.price, 0);
-  return sum + (base + addOns) * item.quantity;
-}, 0);
+  const computedTotal = items.reduce((sum, item) => {
+    const base = item.selectedVariant?.price || item.price || 0
+    const addOns = (item.selectedAddOns || []).reduce(
+      (s, a) => s + a.price,
+      0
+    )
+    return sum + (base + addOns) * (item.quantity || 1)
+  }, 0)
 
-const cgst = Math.round(computedTotal * 0.025);
-const sgst = Math.round(computedTotal * 0.025);
+  const cgst = Math.round(computedTotal * 0.025)
+  const sgst = Math.round(computedTotal * 0.025)
 
   const calculateDiscount = () => {
     if (!appliedCoupon) return 0
     if (appliedCoupon.type === "fixed") {
       return appliedCoupon.discount
     } else {
-      const discount = (total * appliedCoupon.discount) / 100
+      const discount = (computedTotal * appliedCoupon.discount) / 100
       return appliedCoupon.maxDiscount
         ? Math.min(discount, appliedCoupon.maxDiscount)
         : discount
@@ -88,8 +101,6 @@ const sgst = Math.round(computedTotal * 0.025);
 
   const discount = calculateDiscount()
   const finalTotal = computedTotal + cgst + sgst - discount
-
- 
 
   const handleAddAddress = address => {
     setAddresses([...addresses, address])
@@ -110,40 +121,118 @@ const sgst = Math.round(computedTotal * 0.025);
     setAddresses(addresses.filter(addr => addr.id !== addressId))
   }
 
-const handleSelectAddress = (address) => {
-  setSelectedAddress(address);
+  const handleSelectAddress = address => {
+    setSelectedAddress(address)
 
-  // Update Redux location
-  dispatch(
-    setLocation({
-      type: "delivery",
-      data: address.address
+    // keep Redux location in sync
+    dispatch(
+      setLocation({
+        type: "delivery",
+        data: address.address
+      })
+    )
+  }
+
+  // Ask for location again on payment page (when user clicks button)
+  const handleDetectLocationAgain = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser")
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async position => {
+        const { latitude, longitude } = position.coords
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          )
+          const data = await response.json()
+          const address = data.display_name
+
+          dispatch(
+            setLocation({
+              type: "delivery",
+              data: address
+            })
+          )
+        } catch (err) {
+          console.error("Error reverse geocoding:", err)
+          alert("Could not fetch address.")
+        }
+      },
+      error => {
+        console.log("Location denied or failed:", error)
+        alert("We couldn't get your location. You can still continue.")
+      }
+    )
+  }
+
+  // Place order – uses per-item specialInstructions
+  const handlePlaceOrderInternal = () => {
+    const orderDetails = {
+      items,
+      userDetails: effectiveUser,
+      deliveryAddress:
+        location.data || selectedAddress?.address || "No address",
+      subtotal: computedTotal,
+      cgst,
+      sgst,
+      discount,
+      total: finalTotal,
+      appliedCoupon,
+      orderId: `MF${Date.now()}`,
+      estimatedDelivery: "45-50 mins"
+    }
+    onPlaceOrder(orderDetails)
+
+    // Clear saved notes after order
+    setNoteDrafts({})
+    localStorage.removeItem("itemNotes")
+  }
+
+  // Start editing note for one item
+  const startEditingNote = item => {
+    setEditingNoteId(item.id)
+    setNoteDrafts(prev => ({
+      ...prev,
+      [item.id]:
+        prev[item.id] ??
+        item.specialInstructions ??
+        ""
+    }))
+  }
+
+  // Save note for one item
+  const saveNoteForItem = itemId => {
+    const text = (noteDrafts[itemId] || "").trim()
+
+    // update in local items state
+    setItems(prev =>
+      prev.map(it =>
+        it.id === itemId ? { ...it, specialInstructions: text } : it
+      )
+    )
+
+    // persist to localStorage
+    const nextNotes = {
+      ...noteDrafts,
+      [itemId]: text
+    }
+    localStorage.setItem("itemNotes", JSON.stringify(nextNotes))
+    setNoteDrafts(nextNotes)
+    setEditingNoteId(null)
+  }
+
+  // Cancel editing for one item
+  const cancelNoteForItem = itemId => {
+    setEditingNoteId(null)
+    setNoteDrafts(prev => {
+      const copy = { ...prev }
+      delete copy[itemId]
+      return copy
     })
-  );
-};
-
-
- const handlePlaceOrder = () => {
-  const orderDetails = {
-    items,
-    userDetails,
-    deliveryAddress: location.data || selectedAddress?.address || "No address",
-    preparationInstructions,
-    subtotal: computedTotal,
-    cgst,
-    sgst,
-    discount,
-    total: finalTotal,
-    appliedCoupon,
-    orderId: `MF${Date.now()}`,
-    estimatedDelivery: "45-50 mins"
-  };
-  onPlaceOrder(orderDetails);
-  // clear after placing order
-  setPreparationInstructions("");
-  localStorage.removeItem("preparationInstructions");
-};
-
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -168,9 +257,19 @@ const handleSelectAddress = (address) => {
                 <div className="flex-1">
                   <p className="text-sm text-gray-600 mb-1">Your location:</p>
                   <p className="text-gray-900 font-medium">
-  {location.data || "No location selected"}
-</p>
+                    {location.data || "No location selected"}
+                  </p>
 
+                  {!location.data && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 text-orange-500 border-orange-500 bg-transparent"
+                      onClick={handleDetectLocationAgain}
+                    >
+                      Detect current location
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -189,10 +288,13 @@ const handleSelectAddress = (address) => {
                   <Phone className="w-5 h-5 text-gray-500" />
                   <div>
                     <p className="text-gray-900 font-medium">
-                      {userDetails.phone}
+                      {effectiveUser.phone || "No phone added"}
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      {effectiveUser.email || "No email added"}
                     </p>
                     <p className="text-xs text-gray-500">
-                      (We'll send order updates on this no.)
+                      (We'll send order updates on this number/email.)
                     </p>
                   </div>
                 </div>
@@ -213,59 +315,66 @@ const handleSelectAddress = (address) => {
               <div className="space-y-4">
                 {items.map(item => {
                   const basePrice =
-                    item.selectedVariant?.price || item.foodItem.price
-                  const addOnsPrice = item.selectedAddOns.reduce(
+                    item.selectedVariant?.price || item.price || 0
+                  const addOnsPrice = (item.selectedAddOns || []).reduce(
                     (sum, addon) => sum + addon.price,
                     0
                   )
                   const itemTotal = (basePrice + addOnsPrice) * item.quantity
 
+                  const draftValue =
+                    noteDrafts[item.id] ??
+                    item.specialInstructions ??
+                    ""
+
                   return (
                     <div key={item.id} className="space-y-3">
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-3 flex-1">
-                       <div
-  className={`w-4 h-4 border-2 flex items-center justify-center mt-1 ${
-    item.foodItem
-      ? item.foodItem.isVeg
-        ? "border-green-500"
-        : "border-red-500"
-      : "border-gray-300"
-  }`}
->
-  <div
-    className={`w-2 h-2 rounded-full ${
-      item.foodItem
-        ? item.foodItem.isVeg
-          ? "bg-green-500"
-          : "bg-red-500"
-        : "bg-gray-300"
-    }`}
-  />
-</div>
+                          <div
+                            className={`w-4 h-4 border-2 flex items-center justify-center mt-1 ${
+                              item.isVeg ? "border-green-500" : "border-red-500"
+                            }`}
+                          >
+                            <div
+                              className={`w-2 h-2 rounded-full ${
+                                item.isVeg ? "bg-green-500" : "bg-red-500"
+                              }`}
+                            />
+                          </div>
 
                           <div className="flex-1">
-<h3 className="font-medium text-gray-900">
-  {item.foodItem?.name || item.name || "Unnamed Item"}
-</h3>
+                            <h3 className="font-medium text-gray-900">
+                              {item.foodItem?.name ||
+                                item.name ||
+                                "Unnamed Item"}
+                            </h3>
 
+                            {item.selectedVariant && (
+                              <p className="text-sm text-gray-600">
+                                {item.selectedVariant.name}
+                              </p>
+                            )}
+                            {item.selectedAddOns &&
+                              item.selectedAddOns.length > 0 && (
+                                <p className="text-sm text-gray-600">
+                                  Add-ons:{" "}
+                                  {item.selectedAddOns
+                                    .map(a => a.name)
+                                    .join(", ")}
+                                </p>
+                              )}
 
-  {item.selectedVariant && (
-    <p className="text-sm text-gray-600">{item.selectedVariant.name}</p>
-  )}
-  {item.selectedAddOns.length > 0 && (
-    <p className="text-sm text-gray-600">
-      Add-ons: {item.selectedAddOns.map(a => a.name).join(", ")}
-    </p>
-  )}
-   {preparationInstructions && (
-    <p className="text-sm text-gray-500 italic">
-      Note: {preparationInstructions}
-    </p>
-  )}
-  <p className="text-sm font-medium text-gray-900">₹{itemTotal}</p>
-</div>
+                            {item.specialInstructions && (
+                              <p className="text-sm text-gray-500 italic">
+                                Note: {item.specialInstructions}
+                              </p>
+                            )}
 
+                            <p className="text-sm font-medium text-gray-900">
+                              {formatPriceAUD(itemTotal)}
+                            </p>
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -295,36 +404,39 @@ const handleSelectAddress = (address) => {
                         </div>
                       </div>
 
-                      {/* Preparation Instructions */}
+                      {/* Per-item Preparation Instructions */}
                       <div className="ml-7">
-                        {!showInstructionsInput ? (
+                        {editingNoteId !== item.id ? (
                           <button
-                            onClick={() => setShowInstructionsInput(true)}
+                            onClick={() => startEditingNote(item)}
                             className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
                           >
                             <MessageSquare className="w-4 h-4" />
-                            Preparation Instructions +
+                            {item.specialInstructions
+                              ? "Edit preparation instructions"
+                              : "Preparation Instructions +"}
                           </button>
                         ) : (
                           <div className="space-y-2">
                             <div className="flex items-center gap-2 text-sm text-gray-700">
                               <MessageSquare className="w-4 h-4" />
-                              Preparation Instructions
+                              Preparation Instructions (for this item)
                             </div>
                             <Input
                               placeholder="e.g., less spicy, extra sauce, no onions"
-                              value={preparationInstructions}
-                              onChange={e => {
-  setPreparationInstructions(e.target.value);
-  localStorage.setItem("preparationInstructions", e.target.value);
-}}
-
+                              value={draftValue}
+                              onChange={e =>
+                                setNoteDrafts(prev => ({
+                                  ...prev,
+                                  [item.id]: e.target.value
+                                }))
+                              }
                               className="text-sm"
                             />
                             <div className="flex gap-2">
                               <Button
                                 size="sm"
-                                onClick={() => setShowInstructionsInput(false)}
+                                onClick={() => saveNoteForItem(item.id)}
                                 className="bg-orange-500 hover:bg-orange-600 text-white"
                               >
                                 Save
@@ -332,10 +444,7 @@ const handleSelectAddress = (address) => {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => {
-                                  setShowInstructionsInput(false)
-                                  setPreparationInstructions("")
-                                }}
+                                onClick={() => cancelNoteForItem(item.id)}
                               >
                                 Cancel
                               </Button>
@@ -357,26 +466,33 @@ const handleSelectAddress = (address) => {
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Item Total</span>
-<span className="font-medium">₹{computedTotal}</span>
-
+                  <span className="font-medium">
+                    {formatPriceAUD(computedTotal)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">CGST</span>
-                  <span className="font-medium">₹{cgst}</span>
+                  <span className="font-medium">
+                    {formatPriceAUD(cgst)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">SGST</span>
-                  <span className="font-medium">₹{sgst}</span>
+                  <span className="font-medium">
+                    {formatPriceAUD(sgst)}
+                  </span>
                 </div>
                 {discount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Discount ({appliedCoupon?.code})</span>
-                    <span>-₹{Math.round(discount)}</span>
+                    <span>
+                      -{formatPriceAUD(Math.round(discount))}
+                    </span>
                   </div>
                 )}
                 <div className="border-t pt-3 flex justify-between font-semibold text-lg">
                   <span>To Pay</span>
-                  <span>₹{Math.round(finalTotal)}</span>
+                  <span>{formatPriceAUD(Math.round(finalTotal))}</span>
                 </div>
               </div>
             </div>
@@ -389,7 +505,9 @@ const handleSelectAddress = (address) => {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <span className="text-green-600 font-bold text-sm">%</span>
+                    <span className="text-green-600 font-bold text-sm">
+                      %
+                    </span>
                   </div>
                   <span className="font-medium text-green-600">
                     Apply Store offer
@@ -403,7 +521,7 @@ const handleSelectAddress = (address) => {
                     {appliedCoupon.code} Applied
                   </p>
                   <p className="text-xs text-green-600">
-                    You saved ₹{Math.round(discount)}!
+                    You saved {formatPriceAUD(Math.round(discount))}!
                   </p>
                 </div>
               )}
@@ -411,7 +529,7 @@ const handleSelectAddress = (address) => {
 
             {/* Make Payment Button */}
             <Button
-              onClick={handlePlaceOrder}
+              onClick={handlePlaceOrderInternal}
               className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 text-lg font-medium rounded-lg"
             >
               MAKE PAYMENT
@@ -440,7 +558,7 @@ const handleSelectAddress = (address) => {
           setAppliedCoupon(coupon)
           setIsCouponModalOpen(false)
         }}
-        currentTotal={total}
+        currentTotal={computedTotal}
         appliedCoupon={appliedCoupon}
       />
     </div>

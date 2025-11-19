@@ -197,7 +197,7 @@ export function OrderConfirmation({ orderDetails, onBackToHome }) {
             <div className="space-y-4">
               {orderDetails.items.map(item => {
                 const basePrice =
-                  item.selectedVariant?.price || item.foodItem.price
+                  item.selectedVariant?.price || item.price
                 const addOnsPrice = item.selectedAddOns.reduce(
                   (sum, addon) => sum + addon.price,
                   0
@@ -206,30 +206,22 @@ export function OrderConfirmation({ orderDetails, onBackToHome }) {
 
                 return (
                   <div key={item.id} className="flex items-start gap-3">
-                 <div
-  className={`w-4 h-4 border-2 flex items-center justify-center mt-1 ${
-    item.foodItem
-      ? item.foodItem.isVeg
-        ? "border-green-500"
-        : "border-red-500"
-      : "border-gray-300"
-  }`}
->
-  <div
-    className={`w-2 h-2 rounded-full ${
-      item.foodItem
-        ? item.foodItem.isVeg
-          ? "bg-green-500"
-          : "bg-red-500"
-        : "bg-gray-300"
-    }`}
-  />
-</div>
+                    <div
+                      className={`w-4 h-4 border-2 flex items-center justify-center mt-1 ${
+                        item.isVeg ? "border-green-500" : "border-red-500"
+                      }`}
+                    >
+                      <div
+                        className={`w-2 h-2 rounded-full ${
+                          item.isVeg ? "bg-green-500" : "bg-red-500"
+                        }`}
+                      />
+                    </div>
 
                     <div className="flex-1">
-                   <h4 className="font-medium">
-  {item.foodItem?.name || item.name || "Unnamed Item"}
-</h4>
+                      <h4 className="font-medium">
+                        {item.foodItem?.name || item.name || "Unnamed Item"}
+                      </h4>
 
                       {item.selectedVariant && (
                         <p className="text-sm text-gray-600">

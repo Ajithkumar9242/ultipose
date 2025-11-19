@@ -9,4 +9,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      // any request starting with /pos-api will be proxied
+      "/pos-api": {
+        target: "https://devapi.ulti-pos.com/ultipos-online",
+        changeOrigin: true,
+        secure: false
+      }
+    }
+  },
 })
