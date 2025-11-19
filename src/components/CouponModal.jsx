@@ -3,24 +3,26 @@ import { useState } from "react"
 import { X, Tag, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { formatPriceAUD } from "../utils/currency"   // ⬅️ ADD THIS
 
 export function CouponModal({
   isOpen,
   onClose,
   onApplyCoupon,
-  currentTotal,
+  currentTotal,    // cents
   appliedCoupon
 }) {
   const [couponCode, setCouponCode] = useState("")
 
+  // amounts here are in cents
   const availableCoupons = [
     {
       code: "SAVE10",
       title: "Save 10%",
-      description: "Get 10% off on orders above ₹200",
+      description: "Get 10% off on your order",
       discount: 10,
-      minOrder: 200,
-      maxDiscount: 50,
+      minOrder: 2000,   // AUD 20.00
+      maxDiscount: 500, // AUD 5.00
       type: "percentage"
     },
     {
@@ -28,16 +30,16 @@ export function CouponModal({
       title: "First Order",
       description: "20% off on your first order",
       discount: 20,
-      minOrder: 150,
-      maxDiscount: 100,
+      minOrder: 1500,   // AUD 15.00
+      maxDiscount: 1000, // AUD 10.00
       type: "percentage"
     },
     {
       code: "FLAT50",
-      title: "Flat ₹50 Off",
-      description: "Get ₹50 off on orders above ₹300",
-      discount: 50,
-      minOrder: 300,
+      title: "Flat Discount",
+      description: "Flat discount on your order",
+      discount: 500,    // AUD 5.00 flat
+      minOrder: 3000,   // AUD 30.00
       type: "fixed"
     },
     {
@@ -45,8 +47,8 @@ export function CouponModal({
       title: "Weekend Special",
       description: "15% off on weekend orders",
       discount: 15,
-      minOrder: 250,
-      maxDiscount: 75,
+      minOrder: 2500,   // AUD 25.00
+      maxDiscount: 750, // AUD 7.50
       type: "percentage"
     }
   ]
@@ -61,7 +63,9 @@ export function CouponModal({
       onApplyCoupon(coupon)
       onClose()
     } else if (coupon) {
-      alert(`Minimum order amount is ₹${coupon.minOrder}`)
+      alert(
+        `Minimum order amount is ${formatPriceAUD(coupon.minOrder)}`
+      )
     } else {
       alert("Invalid coupon code")
     }
@@ -143,18 +147,25 @@ export function CouponModal({
                       <h4 className="font-medium text-gray-900 mb-1">
                         {coupon.title}
                       </h4>
-                      <p className="text-sm text-gray-600 mb-2">
+                      <p className="text-sm text-gray-600 mb-1">
                         {coupon.description}
+                      </p>
+                      <p className="text-xs text-gray-500 mb-2">
+                        Min order: {formatPriceAUD(coupon.minOrder)}
                       </p>
                       {eligible && (
                         <p className="text-sm font-medium text-green-600">
-                          You'll save ₹{Math.round(discount)}
+                          You&apos;ll save{" "}
+                          {formatPriceAUD(Math.round(discount))}
                         </p>
                       )}
                       {!eligible && (
                         <p className="text-sm text-red-500">
-                          Add ₹{coupon.minOrder - currentTotal} more to apply
-                          this coupon
+                          Add{" "}
+                          {formatPriceAUD(
+                            coupon.minOrder - currentTotal
+                          )}{" "}
+                          more to apply this coupon
                         </p>
                       )}
                     </div>

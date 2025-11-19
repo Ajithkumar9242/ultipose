@@ -2,6 +2,8 @@
 import { useState } from "react"
 import { X, Plus, Minus, Star, Clock, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { toast } from "react-hot-toast"
+import { formatPriceAUD } from "../utils/currency"   // ⬅️ AUD formatter
 
 export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
   const [quantity, setQuantity] = useState(1)
@@ -25,6 +27,7 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
       (sum, addon) => sum + addon.price,
       0
     )
+    // 🔹 Still returns raw number (e.g. cents) – we format only when displaying
     return (basePrice + addOnsPrice) * quantity
   }
 
@@ -36,6 +39,9 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
       selectedAddOns,
       specialInstructions
     )
+
+    toast.success(`${item.name} added to cart`)
+
     onClose()
     setQuantity(1)
     setSelectedAddOns([])
@@ -131,7 +137,7 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
             </p>
           </div>
 
-          {/* Variants – will be hidden if there are no variants */}
+          {/* Variants */}
           {item.variants && item.variants.length > 0 && (
             <div className="mb-6">
               <h4 className="font-semibold mb-3">Choose Size</h4>
@@ -151,14 +157,16 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
                       />
                       <span>{variant.name}</span>
                     </div>
-                    <span className="font-medium">₹{variant.price}</span>
+                    <span className="font-medium">
+                      {formatPriceAUD(variant.price)}
+                    </span>
                   </label>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Add-ons – NOW ONLY FROM POS JSON (modifierGroups → addOns) */}
+          {/* Add-ons */}
           {item.addOns && item.addOns.length > 0 && (
             <div className="mb-6">
               <h4 className="font-semibold mb-3">Add-ons</h4>
@@ -190,7 +198,9 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
                         <span>{addon.name}</span>
                       </div>
                     </div>
-                    <span className="font-medium">₹{addon.price}</span>
+                    <span className="font-medium">
+                      {formatPriceAUD(addon.price)}
+                    </span>
                   </label>
                 ))}
               </div>
@@ -236,7 +246,7 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
               onClick={handleAddToCartClick}
               className="bg-orange-500 hover:bg-orange-600 text-white px-8"
             >
-              Add to Cart - ₹{calculateTotal()}
+              Add to Cart - {formatPriceAUD(calculateTotal())}
             </Button>
           </div>
         </div>
