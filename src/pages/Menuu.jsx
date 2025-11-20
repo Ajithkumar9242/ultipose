@@ -32,16 +32,15 @@ import {
 
 
 import NotFound from "./NotFound"
+import api from "@/api"
 
 // 🔹 BASE URL & default store from env
-const POS_API_BASE = import.meta.env.VITE_POS_API_BASE
-const DEFAULT_STORE_CODE =
-  import.meta.env.VITE_DEFAULT_STORE_CODE || "ultipos-test-store-1"
+const DEFAULT_STORE_CODE = "ultipos-test-store-1"
 
 export default function Menuu() {
   const { storeCode } = useParams()
   const effectiveStoreCode = storeCode || DEFAULT_STORE_CODE
-  const POS_API_URL = `${POS_API_BASE}/${effectiveStoreCode}`
+  const POS_API_URL = `/ultipos-online/${effectiveStoreCode}`
 
   const [vegOnly, setVegOnly] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
@@ -169,7 +168,11 @@ useEffect(() => {
       }
       setStoreNotFound(false)
 
-      const res = await fetch(POS_API_URL)
+      // const res = await fetch(POS_API_URL)
+      // console.log("Fetching menu from", res)
+
+      const res = await api.get(POS_API_URL)
+      console.log("Result", res)
 
       if (res.status === 404) {
         setStoreNotFound(true)
@@ -179,11 +182,11 @@ useEffect(() => {
         return
       }
 
-      if (!res.ok) {
-        throw new Error("Failed to fetch menu")
-      }
+      // if (!res.ok) {
+      //   throw new Error("Failed to fetch menu")
+      // }
 
-      const data = await res.json()
+      const data = await res.data;
 
       const mapped = mapPosMenuToClient(data)
 

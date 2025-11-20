@@ -22,9 +22,10 @@ export function AddressModal({
     name: "",
     address: "",
     landmark: "",
-    city: "",
+    city: "Bangalore",
     pincode: ""
   })
+  const [isLocating, setIsLocating] = useState(false)
 
   if (!isOpen) return null
 
@@ -80,6 +81,59 @@ export function AddressModal({
       default:
         return <MapPin className="w-5 h-5" />
     }
+  }
+
+  // 🔹 Use browser location to autofill address fields
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.")
+      return
+    }
+
+    setIsLocating(true)
+
+    navigator.geolocation.getCurrentPosition(
+      async position => {
+        const { latitude, longitude } = position.coords
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          )
+          const data = await response.json()
+
+          const displayAddress = data.display_name || ""
+          const addr = data.address || {}
+
+          const city =
+            addr.city ||
+            addr.town ||
+            addr.village ||
+            addr.suburb ||
+            formData.city
+
+          const pincode = addr.postcode || formData.pincode
+
+          setFormData(prev => ({
+            ...prev,
+            address: displayAddress || prev.address,
+            city: city,
+            pincode: pincode
+          }))
+        } catch (err) {
+          console.error("Error reverse geocoding:", err)
+          alert("Could not fetch address from location.")
+        } finally {
+          setIsLocating(false)
+        }
+      },
+      error => {
+        console.log("Location denied or failed:", error)
+        alert(
+          "We couldn't get your location. Please allow location or fill address manually."
+        )
+        setIsLocating(false)
+      }
+    )
   }
 
   return (
@@ -232,11 +286,22 @@ export function AddressModal({
                 />
               </div>
 
-              {/* Address */}
+              {/* Address + Use my location */}
               <div>
-                <label className="block text-sm font-medium mb-2">
-                  Complete Address *
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium">
+                    Complete Address *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleUseCurrentLocation}
+                    className="flex items-center gap-1 text-xs text-orange-600 border border-orange-300 px-2 py-1 rounded-lg hover:bg-orange-50"
+                    disabled={isLocating}
+                  >
+                    <MapPin className="w-3 h-3" />
+                    {isLocating ? "Detecting..." : "Use my location"}
+                  </button>
+                </div>
                 <textarea
                   placeholder="House/Flat no, Building name, Street name, Area"
                   value={formData.address}
