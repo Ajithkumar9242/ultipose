@@ -26,8 +26,11 @@ import {
   removeItem,
   updateQuantity,
   clearCart,
-  setIsOpen
+  setIsOpen,
+  setCurrentStore
 } from "../redux/store"
+
+
 import NotFound from "./NotFound"
 
 // 🔹 BASE URL & default store from env
@@ -72,7 +75,12 @@ export default function Menuu() {
   const [showLocationPrompt, setShowLocationPrompt] = useState(false)
 
   const dispatch = useDispatch()
-  const cartItems = useSelector(state => state.cart.items)
+const cartItems = useSelector(state => {
+  const currentStore = state.cart.currentStore
+  if (!currentStore) return []
+  return state.cart.byStore[currentStore] || []
+})
+
   const isCartOpen = useSelector(state => state.cart.isOpen)
  const location = useSelector(state => state.location)
 const savedUser = useSelector(state => state.user.details) // ⬅️ NEW
@@ -130,45 +138,80 @@ const savedUser = useSelector(state => state.user.details) // ⬅️ NEW
     setShowLocationPrompt(false)
   }
 
-  // 🔹 Fetch menu + store info
-  useEffect(() => {
-    const fetchMenu = async () => {
-      try {
-        setLoading(true)
-        setStoreNotFound(false)
+useEffect(() => {
+  dispatch(setCurrentStore(effectiveStoreCode))
+}, [effectiveStoreCode, dispatch])
 
-        const res = await fetch(POS_API_URL)
 
-        if (res.status === 404) {
-          setStoreNotFound(true)
-          setFoodItems([])
-          setMenuCategories(["Menu"])
-          setStoreInfo(null)
-          return
-        }
 
-        if (!res.ok) {
-          throw new Error("Failed to fetch menu")
-        }
+  // 🔹 Fetch menu + store info with simple cache
+useEffect(() => {
+  const cacheKey = `menu-cache:${effectiveStoreCode}`
 
-        const data = await res.json()
-
-        // store meta from API
-        setStoreInfo(data.store || null)
-
-        const mapped = mapPosMenuToClient(data)
-        setFoodItems(mapped.foodItems)
-        setMenuCategories(mapped.menuCategories)
-      } catch (err) {
-        console.error(err)
-        toast.error("Failed to load menu")
-      } finally {
-        setLoading(false)
-      }
+  const cached = sessionStorage.getItem(cacheKey)
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached)
+      setFoodItems(parsed.foodItems || [])
+      setMenuCategories(parsed.menuCategories || ["Menu"])
+      setStoreInfo(parsed.storeInfo || null)
+      setLoading(false)            // ✅ don't show skeleton again
+    } catch (e) {
+      console.error("Failed to parse cached menu", e)
     }
+  }
 
-    fetchMenu()
-  }, [POS_API_URL])
+  const fetchMenu = async () => {
+    try {
+      // if we already had cached data, don't show skeleton again
+      if (!cached) {
+        setLoading(true)
+      }
+      setStoreNotFound(false)
+
+      const res = await fetch(POS_API_URL)
+
+      if (res.status === 404) {
+        setStoreNotFound(true)
+        setFoodItems([])
+        setMenuCategories(["Menu"])
+        setStoreInfo(null)
+        return
+      }
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch menu")
+      }
+
+      const data = await res.json()
+
+      const mapped = mapPosMenuToClient(data)
+
+      setStoreInfo(data.store || null)
+      setFoodItems(mapped.foodItems)
+      setMenuCategories(mapped.menuCategories)
+
+      // ✅ store in cache for next time
+      sessionStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          foodItems: mapped.foodItems,
+          menuCategories: mapped.menuCategories,
+          storeInfo: data.store || null
+        })
+      )
+    } catch (err) {
+      console.error(err)
+      toast.error("Failed to load menu")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // always call fetchMenu (it will be fast if cached already set UI)
+  fetchMenu()
+}, [POS_API_URL, effectiveStoreCode])
+
 
   const getCartItemsCount = () =>
     cartItems.reduce((total, item) => total + (item.quantity || 1), 0)

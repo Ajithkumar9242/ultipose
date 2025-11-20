@@ -1,27 +1,7 @@
 // src/redux/store.js
 import { configureStore, createSlice } from "@reduxjs/toolkit"
 import locationReducer from "./locationSlice"
-import userReducer from "./userSlice"   // ⬅️ NEW
-
-// Load from localStorage
-const loadCart = () => {
-  try {
-    const serialized = localStorage.getItem("cart")
-    return serialized ? JSON.parse(serialized) : []
-  } catch (e) {
-    return []
-  }
-}
-
-// Save to localStorage
-const saveCart = cart => {
-  try {
-    const serialized = JSON.stringify(cart)
-    localStorage.setItem("cart", serialized)
-  } catch (e) {
-    // Ignore write errors
-  }
-}
+import userReducer from "./userSlice"
 
 // 🔹 helper: normalize add-ons array (order doesn’t matter)
 const normalizeAddOns = (addOns = []) =>
@@ -36,26 +16,60 @@ const buildCartKey = item => {
   return `${baseId}__${variantId}__${addOnsKey}__${note}`
 }
 
+// 🔹 Load full cart slice (all stores) from localStorage
+const loadCartState = () => {
+  try {
+    const serialized = localStorage.getItem("cartSlice")
+    if (!serialized) {
+      return {
+        byStore: {},
+        currentStore: null,
+        isOpen: false
+      }
+    }
+    const parsed = JSON.parse(serialized)
+    return {
+      byStore: parsed.byStore || {},
+      currentStore: parsed.currentStore || null,
+      isOpen: !!parsed.isOpen
+    }
+  } catch (e) {
+    return {
+      byStore: {},
+      currentStore: null,
+      isOpen: false
+    }
+  }
+}
+
 const cartSlice = createSlice({
   name: "cart",
-  initialState: {
-    items: loadCart(),
-    isOpen: false
-  },
+  initialState: loadCartState(),
   reducers: {
+    // 🔹 Set which store we are currently on
+    setCurrentStore(state, action) {
+      const storeCode = action.payload
+      state.currentStore = storeCode
+      if (!state.byStore[storeCode]) {
+        state.byStore[storeCode] = []
+      }
+    },
+
     addItem(state, action) {
+      const storeCode = state.currentStore
+      if (!storeCode) return
+
+      const items = state.byStore[storeCode] || (state.byStore[storeCode] = [])
       const newItem = action.payload
       const newKey = buildCartKey(newItem)
 
-      const existing = state.items.find(
-        item => buildCartKey(item) === newKey
-      )
+      const existing = items.find(item => buildCartKey(item) === newKey)
 
       if (existing) {
         const qtyToAdd = newItem.quantity || 1
         existing.quantity = (existing.quantity || 1) + qtyToAdd
       } else {
-        state.items.push({
+        items.push({
           ...newItem,
           quantity: newItem.quantity || 1
         })
@@ -63,19 +77,31 @@ const cartSlice = createSlice({
     },
 
     removeItem(state, action) {
-      state.items = state.items.filter(item => item.id !== action.payload)
+      const storeCode = state.currentStore
+      if (!storeCode) return
+
+      const items = state.byStore[storeCode] || []
+      state.byStore[storeCode] = items.filter(
+        item => item.id !== action.payload
+      )
     },
 
     updateQuantity(state, action) {
+      const storeCode = state.currentStore
+      if (!storeCode) return
+
       const { id, quantity } = action.payload
-      const item = state.items.find(item => item.id === id)
+      const items = state.byStore[storeCode] || []
+      const item = items.find(item => item.id === id)
       if (item) {
         item.quantity = quantity < 1 ? 1 : quantity
       }
     },
 
     clearCart(state) {
-      state.items = []
+      const storeCode = state.currentStore
+      if (!storeCode) return
+      state.byStore[storeCode] = []
     },
 
     setIsOpen(state, action) {
@@ -89,18 +115,24 @@ export const {
   removeItem,
   updateQuantity,
   clearCart,
-  setIsOpen
+  setIsOpen,
+  setCurrentStore
 } = cartSlice.actions
 
 export const store = configureStore({
   reducer: {
     cart: cartSlice.reducer,
     location: locationReducer,
-    user: userReducer        // ⬅️ NEW
+    user: userReducer
   }
 })
 
-// Persist on state change
+// 🔹 Persist the *entire* cart slice (all stores) on every state change
 store.subscribe(() => {
-  saveCart(store.getState().cart.items)
+  try {
+    const cartState = store.getState().cart
+    localStorage.setItem("cartSlice", JSON.stringify(cartState))
+  } catch (e) {
+    // ignore write errors
+  }
 })

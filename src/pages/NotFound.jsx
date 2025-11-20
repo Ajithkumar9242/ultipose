@@ -1,230 +1,161 @@
-// src/pages/NotFound.jsx
-import { Link } from "react-router-dom"
+import React from 'react';
+import { Link } from 'react-router-dom'; // Imported from old code
+import { ArrowLeft } from 'lucide-react'; 
 
+// --- Logic from Old Code ---
 const DEFAULT_STORE_CODE =
-  import.meta.env.VITE_DEFAULT_STORE_CODE || "ultipos-test-store-1"
+  import.meta.env.VITE_DEFAULT_STORE_CODE || "ultipos-test-store-1";
+// ---------------------------
 
+// Refined SVG Icons for floating background elements
+const FoodItemIcon = ({ type, className = "" }) => {
+  let pathD = "";
+  let fillPrimary = "#fdba74"; // Tailwind orange-300
+  
+  switch (type) {
+    case 'burger':
+      pathD = "M22 10.5C22 14.6421 18.6421 18 14.5 18H9.5C5.35786 18 2 14.6421 2 10.5C2 6.35786 5.35786 3 9.5 3H14.5C18.6421 3 22 6.35786 22 10.5Z M2 10H22V14H2V10Z"; 
+      break;
+    case 'pizza':
+      pathD = "M12 2L22 12C22 12 17.5 22 12 22C6.5 22 2 12 2 12L12 2Z M12 5L7 12H17L12 5Z"; 
+      break;
+    case 'coffee':
+      pathD = "M7 10H17V17H7V10Z M19 12H21V15H19V12Z M7 10C7 8.34315 8.34315 7 10 7H14C15.6569 7 17 8.34315 17 10V10H7V10Z M9 3H15V6H9V3Z"; 
+      break;
+    default:
+      pathD = "";
+  }
 
-export default function NotFound() {
   return (
-    <div className="w-full h-screen flex flex-col lg:flex-row items-center justify-center space-y-16 lg:space-y-0 space-x-8 2xl:space-x-0 bg-white">
-      {/* Left section: text */}
-      <div className="w-full lg:w-1/2 flex flex-col items-center justify-center lg:px-2 xl:px-0 text-center">
-        <p className="text-7xl md:text-8xl lg:text-9xl font-bold tracking-wider text-gray-300">
-          404
-        </p>
-        <p className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-wider text-gray-300 mt-2">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" className={className}>
+      <path d={pathD} fill={fillPrimary} />
+    </svg>
+  );
+};
+
+const DonutSVG = () => (
+  <svg 
+    width="140" 
+    height="140" 
+    viewBox="0 0 100 100" 
+    className="w-32 h-32 md:w-48 md:h-48 drop-shadow-lg"
+  >
+    {/* Base Dough */}
+    <circle cx="50" cy="50" r="40" fill="#fbd38d" />
+    {/* Orange Glaze */}
+    <path 
+      d="M50 15 C 30 15, 15 30, 15 50 C 15 70, 30 85, 50 85 C 70 85, 85 70, 85 50 C 85 30, 70 15, 50 15 Z" 
+      fill="#fb923c" 
+      stroke="#ea580c" 
+      strokeWidth="2" 
+      strokeLinecap="round"
+      className="scale-[0.9] origin-center"
+    />
+    {/* Donut Hole */}
+    <circle cx="50" cy="50" r="12" fill="#fff7ed" />
+    
+    {/* Sprinkles */}
+    <rect x="35" y="25" width="2" height="6" rx="1" fill="#fcd34d" transform="rotate(20 35 25)" />
+    <rect x="65" y="30" width="2" height="6" rx="1" fill="#fdbf6b" transform="rotate(-15 65 30)" />
+    <rect x="50" y="70" width="2" height="6" rx="1" fill="#fcd34d" transform="rotate(45 50 70)" />
+    <rect x="25" y="50" width="2" height="6" rx="1" fill="#fdbf6b" transform="rotate(90 25 50)" />
+    <rect x="75" y="55" width="2" height="6" rx="1" fill="#fcd34d" transform="rotate(-30 75 55)" />
+  </svg>
+);
+
+const NotFound = () => {
+  const foodIcons = [
+    { type: 'burger', delay: '0s', size: 'w-8 h-8 md:w-10 md:h-10' },
+    { type: 'pizza', delay: '2s', size: 'w-6 h-6 md:w-8 md:h-8' },
+    { type: 'coffee', delay: '4s', size: 'w-7 h-7 md:w-9 md:h-9' },
+    { type: 'burger', delay: '6s', size: 'w-9 h-9 md:w-11 md:h-11' },
+    { type: 'pizza', delay: '8s', size: 'w-7 h-7 md:w-9 md:h-9' },
+    { type: 'coffee', delay: '10s', size: 'w-8 h-8 md:w-10 md:h-10' },
+  ];
+
+  return (
+    <div className="relative min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100 text-stone-800 p-4 overflow-hidden">
+      
+      {/* Background Floating Icons */}
+      {foodIcons.map((item, index) => (
+        <div 
+          key={index} 
+          className="absolute opacity-0 animate-bg-float" 
+          style={{ 
+            animationDelay: item.delay, 
+            left: `${Math.random() * 90}%`, 
+            top: `${Math.random() * 90}%`,
+            animationDuration: `${10 + Math.random() * 10}s`,
+            animationIterationCount: 'infinite',
+            animationDirection: index % 2 === 0 ? 'normal' : 'reverse',
+          }}
+        >
+          <FoodItemIcon type={item.type} className={`text-orange-300/50 ${item.size}`} />
+        </div>
+      ))}
+
+      {/* Main Visual Container */}
+      <div className="relative flex items-center justify-center font-bold text-[10rem] md:text-[15rem] leading-none select-none text-orange-200 font-mono z-20">
+        <span className="text-orange-300">4</span>
+        
+        {/* The Donut (Animated Zero) */}
+        <div className="relative mx-2 animate-float">
+           <DonutSVG />
+           <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-24 h-4 bg-orange-200/50 rounded-[100%] blur-md animate-shadow-pulse"></div>
+        </div>
+
+        <span className="text-orange-300">4</span>
+      </div>
+
+      {/* Text Content */}
+      <div className="text-center space-y-6 max-w-md z-20 -mt-8">
+        <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-stone-800">
           Page Not Found
-        </p>
-        <p className="text-lg md:text-xl lg:text-2xl text-gray-500 my-12">
-          Sorry, the page you are looking for could not be found.
+        </h2>
+        <p className="text-stone-600 text-lg">
+          Sorry, the page you are looking for could not be found. It may have been eaten!
         </p>
 
-        <Link
-  to={`/store/${DEFAULT_STORE_CODE}`}
-  className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-gray-100 px-4 py-2 rounded transition duration-150"
-  title="Return Home"
->
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-          >
-            <path
-              fillRule="evenodd"
-              clipRule="evenodd"
-              d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z"
-            />
-          </svg>
-          <span>Return Home</span>
+        {/* CTA Button - Using Link from react-router-dom with Old Code Logic */}
+        <Link 
+          to={`/store/${DEFAULT_STORE_CODE}`}
+          title="Return Home"
+          className="group inline-flex items-center gap-2 px-8 py-3 bg-orange-500 text-white rounded-full font-semibold shadow-lg hover:bg-orange-600 hover:shadow-orange-500/50 transition-all duration-300 transform hover:-translate-y-1"
+        >
+          <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+          Back to Menu
         </Link>
       </div>
 
-      {/* Right section: SVG illustration */}
-      <div className="w-1/2 lg:h-full flex lg:items-end justify-center p-4">
-        <svg
-          className="w-full text-blue-600"
-          xmlns="http://www.w3.org/2000/svg"
-          data-name="Layer 1"
-          viewBox="0 0 1120.59226 777.91584"
-        >
-          <title>not found</title>
-          <circle cx="212.59226" cy="103" r="64" fill="#ff6584" />
-          <path
-            d="M563.68016,404.16381c0,151.01141-89.77389,203.73895-200.51559,203.73895S162.649,555.17522,162.649,404.16381,363.16457,61.04208,363.16457,61.04208,563.68016,253.1524,563.68016,404.16381Z"
-            transform="translate(-39.70387 -61.04208)"
-            fill="#cbd5e1"
-          />
-          <polygon
-            points="316.156 523.761 318.21 397.378 403.674 241.024 318.532 377.552 319.455 320.725 378.357 207.605 319.699 305.687 319.699 305.687 321.359 203.481 384.433 113.423 321.621 187.409 322.658 0 316.138 248.096 316.674 237.861 252.547 139.704 315.646 257.508 309.671 371.654 309.493 368.625 235.565 265.329 309.269 379.328 308.522 393.603 308.388 393.818 308.449 394.99 293.29 684.589 313.544 684.589 315.974 535.005 389.496 421.285 316.156 523.761"
-            fill="#3f3d56"
-          />
-          <path
-            d="M1160.29613,466.01367c0,123.61-73.4842,166.77-164.13156,166.77s-164.13156-43.16-164.13156-166.77S996.16457,185.15218,996.16457,185.15218,1160.29613,342.40364,1160.29613,466.01367Z"
-            transform="translate(-39.70387 -61.04208)"
-            fill="#cbd5e1"
-          />
-          <polygon
-            points="950.482 552.833 952.162 449.383 1022.119 321.4 952.426 433.154 953.182 386.639 1001.396 294.044 953.382 374.329 953.382 374.329 954.741 290.669 1006.369 216.952 954.954 277.514 955.804 124.11 950.467 327.188 950.906 318.811 898.414 238.464 950.064 334.893 945.173 428.327 945.027 425.847 884.514 341.294 944.844 434.608 944.232 446.293 944.123 446.469 944.173 447.428 931.764 684.478 948.343 684.478 950.332 562.037 1010.514 468.952 950.482 552.833"
-            fill="#3f3d56"
-          />
-          <ellipse
-            cx="554.59226"
-            cy="680.47903"
-            rx="554.59226"
-            ry="28.03433"
-            fill="#3f3d56"
-          />
-          <ellipse
-            cx="892.44491"
-            cy="726.79663"
-            rx="94.98858"
-            ry="4.80162"
-            fill="#3f3d56"
-          />
-          <ellipse
-            cx="548.71959"
-            cy="773.11422"
-            rx="94.98858"
-            ry="4.80162"
-            fill="#3f3d56"
-          />
-          <ellipse
-            cx="287.94432"
-            cy="734.27887"
-            rx="217.01436"
-            ry="10.96996"
-            fill="#3f3d56"
-          />
-          <circle cx="97.08375" cy="566.26982" r="79" fill="#2f2e41" />
-          <rect
-            x="99.80546"
-            y="689.02332"
-            width="24"
-            height="43"
-            transform="translate(-31.32451 -62.31008) rotate(0.67509)"
-            fill="#2f2e41"
-          />
-          <rect
-            x="147.80213"
-            y="689.58887"
-            width="24"
-            height="43"
-            transform="translate(-31.31452 -62.87555) rotate(0.67509)"
-            fill="#2f2e41"
-          />
-          <ellipse
-            cx="119.54569"
-            cy="732.61606"
-            rx="7.5"
-            ry="20"
-            transform="translate(-654.1319 782.47948) rotate(-89.32491)"
-            fill="#2f2e41"
-          />
-          <ellipse
-            cx="167.55414"
-            cy="732.18168"
-            rx="7.5"
-            ry="20"
-            transform="translate(-606.25475 830.05533) rotate(-89.32491)"
-            fill="#2f2e41"
-          />
-          <circle cx="99.31925" cy="546.29477" r="27" fill="#fff" />
-          <circle cx="99.31925" cy="546.29477" r="9" fill="#3f3d56" />
-          <path
-            d="M61.02588,552.94636c-6.04185-28.64075,14.68758-57.26483,46.30049-63.93367s62.13813,11.14292,68.18,39.78367-14.97834,38.93-46.59124,45.59886S67.06774,581.58712,61.02588,552.94636Z"
-            transform="translate(-39.70387 -61.04208)"
-            fill="currentColor"
-          />
-          <path
-            d="M257.29613,671.38411c0,55.07585-32.73985,74.3063-73.13,74.3063q-1.40351,0-2.80255-.0312c-1.87139-.04011-3.72494-.1292-5.55619-.254-36.45135-2.57979-64.77127-22.79937-64.77127-74.02113,0-53.00843,67.73872-119.89612,72.827-124.84633l.00892-.00889c.19608-.19159.29409-.28516.29409-.28516S257.29613,616.30827,257.29613,671.38411Z"
-            transform="translate(-39.70387 -61.04208)"
-            fill="currentColor"
-          />
-          <path
-            d="M181.50168,737.26482l26.747-37.37367-26.81386,41.4773-.07125,4.29076c-1.87139-.04011-3.72494-.1292-5.55619-.254l2.88282-55.10258-.0223-.42775.049-.0802.27179-5.20415-26.88076-41.5798,26.96539,37.67668.06244,1.105,2.17874-41.63324-23.0132-42.96551,23.29391,35.6583,2.26789-86.31419.00892-.294v.28516l-.37871,68.064,22.91079-26.98321-23.00435,32.84678-.60595,37.27566L204.18523,621.958l-21.4805,41.259-.33863,20.723,31.05561-49.79149-31.17146,57.023Z"
-            transform="translate(-39.70387 -61.04208)"
-            fill="#3f3d56"
-          />
-          <circle cx="712.48505" cy="565.41532" r="79" fill="#2f2e41" />
-          <rect
-            x="741.77716"
-            y="691.82355"
-            width="24"
-            height="43"
-            transform="translate(-215.99457 191.86399) rotate(-17.08345)"
-            fill="#2f2e41"
-          />
-          <rect
-            x="787.6593"
-            y="677.72286"
-            width="24"
-            height="43"
-            transform="matrix(0.95588, -0.29376, 0.29376, 0.95588, -209.82788, 204.72037)"
-            fill="#2f2e41"
-          />
-          <ellipse
-            cx="767.887"
-            cy="732.00275"
-            rx="20"
-            ry="7.5"
-            transform="translate(-220.8593 196.83312) rotate(-17.08345)"
-            fill="#2f2e41"
-          />
-          <ellipse
-            cx="813.47537"
-            cy="716.94619"
-            rx="20"
-            ry="7.5"
-            transform="translate(-214.42477 209.56103) rotate(-17.08345)"
-            fill="#2f2e41"
-          />
-          <circle cx="708.52153" cy="545.71023" r="27" fill="#fff" />
-          <circle cx="708.52153" cy="545.71023" r="9" fill="#3f3d56" />
-          <path
-            d="M657.35526,578.74316c-14.48957-25.43323-3.47841-59.016,24.59412-75.0092s62.57592-8.34055,77.06549,17.09268-2.39072,41.6435-30.46325,57.63671S671.84483,604.17639,657.35526,578.74316Z"
-            transform="translate(-39.70387 -61.04208)"
-            fill="currentColor"
-          />
-          <path
-            d="M611.29613,661.29875c0,50.55711-30.05368,68.20979-67.13,68.20979q-1.28835,0-2.57261-.02864c-1.71785-.03682-3.41933-.1186-5.10033-.23313-33.46068-2.36813-59.45707-20.92878-59.45707-67.948,0-48.65932,62.18106-110.05916,66.85186-114.60322l.00819-.00817c.18-.17587.27-.26177.27-.26177S611.29613,610.74164,611.29613,661.29875Z"
-            transform="translate(-39.70387 -61.04208)"
-            fill="currentColor"
-          />
-          <path
-            d="M541.72029,721.77424l24.55253-34.30732-24.6139,38.07426-.0654,3.93872c-1.71785-.03682-3.41933-.1186-5.10033-.23313l2.6463-50.58165-.02047-.39266.045-.07361.24949-4.77718-24.67531-38.16836,24.753,34.58547.05731,1.01433,2-38.21741-21.12507-39.44039L541.80616,625.928l2.08182-79.23247.00819-.26994v.26177l-.34764,62.47962,21.031-24.76934-21.11693,30.15184-.55624,34.21735,19.63634-32.839-19.71812,37.87389-.31085,19.0228,28.50763-45.70631-28.614,52.34448Z"
-            transform="translate(-39.70387 -61.04208)"
-            fill="#3f3d56"
-          />
-          <path
-            d="M875.29613,682.38411c0,55.07585-32.73985,74.3063-73.13,74.3063q-1.4035,0-2.80255-.0312c-1.87139-.04011-3.72494-.1292-5.55619-.254-36.45135-2.57979-64.77127-22.79937-64.77127-74.02113,0-53.00843,67.73872-119.89612,72.827-124.84633l.00892-.00889c.19608-.19159.29409-.28516.29409-.28516S875.29613,627.30827,875.29613,682.38411Z"
-            transform="translate(-39.70387 -61.04208)"
-            fill="currentColor"
-          />
-          <path
-            d="M799.50168,748.26482l26.747-37.37367-26.81386,41.4773-.07125,4.29076c-1.87139-.04011-3.72494-.1292-5.55619-.254l2.88282-55.10258-.0223-.42775.049-.0802.27179-5.20415L770.108,654.01076l26.96539,37.67668.06244,1.105,2.17874-41.63324-23.0132-42.96551,23.29391,35.6583,2.26789-86.31419.00892-.294v.28516l-.37871,68.064,22.91079-26.98321-23.00435,32.84678-.606,37.27566L822.18523,632.958l-21.4805,41.259-.33863,20.723,31.05561-49.79149-31.17146,57.023Z"
-            transform="translate(-39.70387 -61.04208)"
-            fill="#3f3d56"
-          />
-          <ellipse
-            cx="721.51694"
-            cy="656.82212"
-            rx="12.40027"
-            ry="39.5"
-            transform="translate(-220.83517 966.22323) rotate(-64.62574)"
-            fill="#2f2e41"
-          />
-          <ellipse
-            cx="112.51694"
-            cy="651.82212"
-            rx="12.40027"
-            ry="39.5"
-            transform="translate(-574.07936 452.71367) rotate(-68.15829)"
-            fill="#2f2e41"
-          />
-        </svg>
-      </div>
+      {/* Custom Animation Styles */}
+      <style jsx>{`
+        @keyframes float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-20px) rotate(5deg); }
+        }
+        @keyframes shadow-pulse {
+          0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.5; }
+          50% { transform: translateX(-50%) scale(0.8); opacity: 0.3; }
+        }
+        @keyframes bg-float {
+          0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+          10% { opacity: 0.3; }
+          90% { opacity: 0.3; }
+          100% { transform: translateY(-100vh) rotate(360deg); opacity: 0; }
+        }
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
+        }
+        .animate-shadow-pulse {
+          animation: shadow-pulse 6s ease-in-out infinite;
+        }
+        .animate-bg-float {
+          animation-name: bg-float;
+          animation-timing-function: linear;
+        }
+      `}</style>
     </div>
-  )
-}
+  );
+};
+
+export default NotFound;
