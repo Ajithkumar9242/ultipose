@@ -22,7 +22,7 @@ export function AddressModal({
     name: "",
     address: "",
     landmark: "",
-    city: "Bangalore",
+    city: "",
     pincode: ""
   })
 

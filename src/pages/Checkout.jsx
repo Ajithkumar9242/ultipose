@@ -9,14 +9,26 @@ import { clearCart } from "../redux/store"
 import { toast } from "react-hot-toast"
 
 export default function Checkout() {
-  const cartItems = useSelector(state => state.cart.items)
-  const savedUser = useSelector(state => state.user.details)
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const [orderConfirmation, setOrderConfirmation] = useState(null)
 
+  // 🔹 Get currentStore + cart items for that store
+  const { cartItems, currentStore } = useSelector(state => {
+    const storeCode = state.cart.currentStore
+    const itemsForStore = storeCode
+      ? state.cart.byStore[storeCode] || []
+      : []
+    return {
+      cartItems: itemsForStore,
+      currentStore: storeCode
+    }
+  })
+
+  const savedUser = useSelector(state => state.user.details)
+
   const getCartTotal = () =>
-    cartItems.reduce((total, item) => {
+    (cartItems || []).reduce((total, item) => {
       const basePrice = item.selectedVariant?.price || item.price
       const addOnsPrice = (item.selectedAddOns || []).reduce(
         (sum, addon) => sum + addon.price,
@@ -26,7 +38,12 @@ export default function Checkout() {
     }, 0)
 
   const handleBack = () => {
-    navigate(-1) // goes back to store page
+    // Go back to the respective store page if we know it
+    if (currentStore) {
+      navigate(`/store/${currentStore}`)
+    } else {
+      navigate(-1)
+    }
   }
 
   const handlePlaceOrder = orderDetails => {
@@ -36,14 +53,18 @@ export default function Checkout() {
       status: "confirmed"
     }
     setOrderConfirmation(completeOrderDetails)
-    dispatch(clearCart())
+    dispatch(clearCart())  // clears cart for currentStore only
     toast.success(`Order placed successfully! ID: ${orderDetails.orderId}`)
     localStorage.removeItem("preparationInstructions")
   }
 
-  if (!cartItems.length && !orderConfirmation) {
-    // no items -> go back to store/home
-    navigate("/")
+  // 🔹 If no items and no confirmed order → redirect back to store/home
+  if ((!cartItems || cartItems.length === 0) && !orderConfirmation) {
+    if (currentStore) {
+      navigate(`/store/${currentStore}`)
+    } else {
+      navigate("/")
+    }
     return null
   }
 
