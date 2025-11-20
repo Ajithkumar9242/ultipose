@@ -1,13 +1,14 @@
 // src/components/OrderPage.jsx
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   ArrowLeft,
   MapPin,
   Phone,
   Plus,
   Minus,
-  MessageSquare
+  MessageSquare,
+  X
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,11 +16,12 @@ import { CouponModal } from "./CouponModal"
 import { AddressModal } from "./AddressModal"
 import { useSelector, useDispatch } from "react-redux"
 import { setLocation } from "@/redux/locationSlice"
-import { formatPriceAUD } from "../utils/currency" // AUD formatter
+import { updateQuantity, removeItem } from "@/redux/store"
+import { formatPriceAUD } from "../utils/currency"
 
 export function OrderPage({
   cartItems,
-  userDetails, // comes from AuthModal
+  userDetails, // ✅ store-specific user, passed from Checkout
   onBack,
   onPlaceOrder,
   total
@@ -29,31 +31,43 @@ export function OrderPage({
 
   const dispatch = useDispatch()
 
-  const [addresses, setAddresses] = useState([
-    {
-      id: "1",
-      type: "home",
-      name: "John Doe",
-      address: "Cluster_dodda Nekkundi 2 Benoxa Tower, SHRADDHA...",
-      landmark: "Near Metro Station",
-      city: "Bangalore",
-      pincode: "560037",
-      isDefault: true
-    }
-  ])
-  const [selectedAddress, setSelectedAddress] = useState(addresses[0])
+  // 🔹 addresses local to this page
+  const [addresses, setAddresses] = useState([])
+  const [selectedAddress, setSelectedAddress] = useState(null)
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false)
+  const [hasAutoOpenedAddressModal, setHasAutoOpenedAddressModal] =
+    useState(false)
 
-  const location = useSelector(state => state.location)
-  const savedUser = useSelector(state => state.user.details)
+  // 🔥 get currentStore + location FOR THAT STORE
+  const { currentStore, locationForStore } = useSelector(state => {
+    const storeCode = state.cart.currentStore
+    const byStore = state.location.byStore || {}
+    const loc =
+      storeCode && byStore[storeCode]
+        ? byStore[storeCode]
+        : { type: "delivery", data: "" }
 
-  // Prefer local userDetails (from this session), fallback to Redux
-  const effectiveUser = userDetails || savedUser || {}
+    return {
+      currentStore: storeCode,
+      locationForStore: loc
+    }
+  })
 
-  // Local copy of cart items (so we can change qty / notes)
+  // ✅ per-store user
+  const effectiveUser = userDetails || {}
+
+  // ⬇️ AUTO-OPEN ADDRESS POPUP ONCE IF NO LOCATION FOR THIS STORE
+  useEffect(() => {
+    if (!locationForStore?.data && !hasAutoOpenedAddressModal) {
+      setIsAddressModalOpen(true)
+      setHasAutoOpenedAddressModal(true)
+    }
+  }, [locationForStore?.data, hasAutoOpenedAddressModal])
+
+  // Local copy of cart items
   const [items, setItems] = useState(cartItems)
 
-  // Per-item note drafts (id -> string), persisted in localStorage
+  // Notes per item
   const [noteDrafts, setNoteDrafts] = useState(() => {
     try {
       const saved = localStorage.getItem("itemNotes")
@@ -62,17 +76,28 @@ export function OrderPage({
       return {}
     }
   })
-  // Which item currently has the note input open
   const [editingNoteId, setEditingNoteId] = useState(null)
 
+  // 🔹 quantity sync
   const handleUpdateQuantity = (itemId, newQuantity) => {
-    if (newQuantity < 1) return // prevent 0 quantity
+    if (newQuantity < 1) {
+      setItems(prevItems => prevItems.filter(item => item.id !== itemId))
+      dispatch(removeItem(itemId))
+      return
+    }
 
     setItems(prevItems =>
       prevItems.map(item =>
         item.id === itemId ? { ...item, quantity: newQuantity } : item
       )
     )
+
+    dispatch(updateQuantity({ id: itemId, quantity: newQuantity }))
+  }
+
+  const handleRemoveItem = itemId => {
+    setItems(prevItems => prevItems.filter(item => item.id !== itemId))
+    dispatch(removeItem(itemId))
   }
 
   const computedTotal = items.reduce((sum, item) => {
@@ -102,38 +127,50 @@ export function OrderPage({
   const discount = calculateDiscount()
   const finalTotal = computedTotal + cgst + sgst - discount
 
+  // 🔹 Address handlers
+
   const handleAddAddress = address => {
-    setAddresses([...addresses, address])
+    setAddresses(prev => [...prev, address])
+    // ❌ no auto-select; user must tap address card to select
   }
 
   const handleUpdateAddress = updatedAddress => {
-    setAddresses(
-      addresses.map(addr =>
-        addr.id === updatedAddress.id ? updatedAddress : addr
-      )
+    setAddresses(prev =>
+      prev.map(addr => (addr.id === updatedAddress.id ? updatedAddress : addr))
     )
-    if (selectedAddress.id === updatedAddress.id) {
+
+    if (selectedAddress && selectedAddress.id === updatedAddress.id) {
       setSelectedAddress(updatedAddress)
     }
   }
 
   const handleDeleteAddress = addressId => {
-    setAddresses(addresses.filter(addr => addr.id !== addressId))
+    setAddresses(prev => {
+      const filtered = prev.filter(addr => addr.id !== addressId)
+      return filtered
+    })
+
+    if (selectedAddress && selectedAddress.id === addressId) {
+      // ❌ don't pick random one; just clear selection
+      setSelectedAddress(null)
+    }
   }
 
   const handleSelectAddress = address => {
     setSelectedAddress(address)
 
-    // keep Redux location in sync
-    dispatch(
-      setLocation({
-        type: "delivery",
-        data: address.address
-      })
-    )
+    // keep Redux location in sync PER STORE
+    if (currentStore) {
+      dispatch(
+        setLocation({
+          storeCode: currentStore,
+          type: "delivery",
+          data: address.address
+        })
+      )
+    }
   }
 
-  // Ask for location again on payment page (when user clicks button)
   const handleDetectLocationAgain = () => {
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your browser")
@@ -150,12 +187,15 @@ export function OrderPage({
           const data = await response.json()
           const address = data.display_name
 
-          dispatch(
-            setLocation({
-              type: "delivery",
-              data: address
-            })
-          )
+          if (currentStore) {
+            dispatch(
+              setLocation({
+                storeCode: currentStore,
+                type: "delivery",
+                data: address
+              })
+            )
+          }
         } catch (err) {
           console.error("Error reverse geocoding:", err)
           alert("Could not fetch address.")
@@ -168,13 +208,12 @@ export function OrderPage({
     )
   }
 
-  // Place order – uses per-item specialInstructions
   const handlePlaceOrderInternal = () => {
     const orderDetails = {
       items,
       userDetails: effectiveUser,
       deliveryAddress:
-        location.data || selectedAddress?.address || "No address",
+        locationForStore.data || selectedAddress?.address || "No address",
       subtotal: computedTotal,
       cgst,
       sgst,
@@ -186,35 +225,27 @@ export function OrderPage({
     }
     onPlaceOrder(orderDetails)
 
-    // Clear saved notes after order
     setNoteDrafts({})
     localStorage.removeItem("itemNotes")
   }
 
-  // Start editing note for one item
   const startEditingNote = item => {
     setEditingNoteId(item.id)
     setNoteDrafts(prev => ({
       ...prev,
-      [item.id]:
-        prev[item.id] ??
-        item.specialInstructions ??
-        ""
+      [item.id]: prev[item.id] ?? item.specialInstructions ?? ""
     }))
   }
 
-  // Save note for one item
   const saveNoteForItem = itemId => {
     const text = (noteDrafts[itemId] || "").trim()
 
-    // update in local items state
     setItems(prev =>
       prev.map(it =>
         it.id === itemId ? { ...it, specialInstructions: text } : it
       )
     )
 
-    // persist to localStorage
     const nextNotes = {
       ...noteDrafts,
       [itemId]: text
@@ -224,7 +255,6 @@ export function OrderPage({
     setEditingNoteId(null)
   }
 
-  // Cancel editing for one item
   const cancelNoteForItem = itemId => {
     setEditingNoteId(null)
     setNoteDrafts(prev => {
@@ -257,10 +287,10 @@ export function OrderPage({
                 <div className="flex-1">
                   <p className="text-sm text-gray-600 mb-1">Your location:</p>
                   <p className="text-gray-900 font-medium">
-                    {location.data || "No location selected"}
+                    {locationForStore.data || "No location selected"}
                   </p>
 
-                  {!location.data && (
+                  {!locationForStore.data && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -287,7 +317,10 @@ export function OrderPage({
                 <div className="flex items-center gap-3">
                   <Phone className="w-5 h-5 text-gray-500" />
                   <div>
-                    <p className="text-gray-900 font-medium">
+                    <p className="text-gray-900 font-semibold">
+                      {effectiveUser.name || "Guest user"}
+                    </p>
+                    <p className="text-sm text-gray-900">
                       {effectiveUser.phone || "No phone added"}
                     </p>
                     <p className="text-sm text-gray-700">
@@ -388,9 +421,11 @@ export function OrderPage({
                           >
                             <Minus className="w-3 h-3" />
                           </Button>
+
                           <span className="w-8 text-center text-sm font-medium">
                             {item.quantity}
                           </span>
+
                           <Button
                             size="sm"
                             variant="outline"
@@ -400,6 +435,15 @@ export function OrderPage({
                             className="w-8 h-8 p-0 text-orange-500 border-orange-500"
                           >
                             <Plus className="w-3 h-3" />
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="w-8 h-8 p-0 rounded-full text-red-500 border-red-500"
+                          >
+                            <X className="w-3 h-3" />
                           </Button>
                         </div>
                       </div>
@@ -547,7 +591,8 @@ export function OrderPage({
         onAddAddress={handleAddAddress}
         onUpdateAddress={handleUpdateAddress}
         onDeleteAddress={handleDeleteAddress}
-        selectedAddressId={selectedAddress.id}
+        selectedAddressId={selectedAddress?.id || null}
+        defaultName={effectiveUser.name || ""}  // 🔥 prefill name
       />
 
       {/* Coupon Modal */}
@@ -560,6 +605,7 @@ export function OrderPage({
         }}
         currentTotal={computedTotal}
         appliedCoupon={appliedCoupon}
+        storeCode={currentStore}
       />
     </div>
   )

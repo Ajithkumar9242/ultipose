@@ -18,7 +18,7 @@ export function CheckoutModal({
     phone: "",
     address: "",
     landmark: "",
-    city: "Bangalore",
+    city: "",
     pincode: ""
   })
   const [paymentMethod, setPaymentMethod] = useState("online")

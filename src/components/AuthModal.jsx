@@ -1,11 +1,13 @@
+// src/components/AuthModal.jsx
 "use client"
 import { useState, useEffect } from "react"
-import { X, Phone, Mail } from "lucide-react"
+import { X, Phone, Mail, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 export function AuthModal({ isOpen, onClose, onAuthComplete, initialDetails }) {
   const [userDetails, setUserDetails] = useState({
+    name: "",
     email: "",
     phone: ""
   })
@@ -13,12 +15,11 @@ export function AuthModal({ isOpen, onClose, onAuthComplete, initialDetails }) {
   // 🔹 When modal opens, preload from initialDetails (Redux/localStorage)
   useEffect(() => {
     if (isOpen) {
-      setUserDetails(
-        initialDetails || {
-          email: "",
-          phone: ""
-        }
-      )
+      setUserDetails({
+        name: initialDetails?.name || "",
+        email: initialDetails?.email || "",
+        phone: initialDetails?.phone || ""
+      })
     }
   }, [isOpen, initialDetails])
 
@@ -26,6 +27,7 @@ export function AuthModal({ isOpen, onClose, onAuthComplete, initialDetails }) {
 
   const handleContinue = () => {
     if (
+      !userDetails.name ||
       !userDetails.email ||
       !userDetails.phone ||
       userDetails.phone.length !== 10
@@ -35,10 +37,14 @@ export function AuthModal({ isOpen, onClose, onAuthComplete, initialDetails }) {
 
     // Send details up to Menuu (which also stores in Redux)
     onAuthComplete(userDetails)
-
-    // Close modal (no need to clear here, it will reload from Redux next time)
     onClose()
   }
+
+  const disableButton =
+    !userDetails.name ||
+    !userDetails.email ||
+    !userDetails.phone ||
+    userDetails.phone.length !== 10
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -57,6 +63,20 @@ export function AuthModal({ isOpen, onClose, onAuthComplete, initialDetails }) {
               <p className="text-gray-600">
                 Enter your details to continue
               </p>
+            </div>
+
+            {/* Name */}
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                type="text"
+                placeholder="Name"
+                value={userDetails.name}
+                onChange={e =>
+                  setUserDetails({ ...userDetails, name: e.target.value })
+                }
+                className="pl-10"
+              />
             </div>
 
             {/* Email */}
@@ -102,12 +122,8 @@ export function AuthModal({ isOpen, onClose, onAuthComplete, initialDetails }) {
             {/* Continue Button */}
             <Button
               onClick={handleContinue}
-              disabled={
-                !userDetails.email ||
-                !userDetails.phone ||
-                userDetails.phone.length !== 10
-              }
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              disabled={disableButton}
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Continue
             </Button>

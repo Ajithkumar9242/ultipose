@@ -2,44 +2,75 @@
 import { createSlice } from "@reduxjs/toolkit"
 
 // Load from localStorage (if present)
-const loadUserDetails = () => {
-  if (typeof window === "undefined") return null
+const loadUserState = () => {
+  if (typeof window === "undefined") return { byStore: {} }
+
   try {
-    const saved = localStorage.getItem("userDetails")
-    return saved ? JSON.parse(saved) : null
+    const saved = localStorage.getItem("userSlice")
+    if (!saved) {
+      return { byStore: {} }
+    }
+    const parsed = JSON.parse(saved)
+    return {
+      byStore: parsed.byStore || {}
+    }
   } catch (e) {
-    return null
+    return { byStore: {} }
   }
 }
 
-const initialState = {
-  details: loadUserDetails() // { email, phone } or null
-}
+const initialState = loadUserState()
+// Shape: { byStore: { [storeCode]: { name, email, phone } } }
 
 const userSlice = createSlice({
   name: "user",
   initialState,
   reducers: {
+    // payload: { storeCode, details: { name, email, phone } }
     setUserDetails(state, action) {
-      state.details = action.payload
+      const { storeCode, details } = action.payload || {}
+      if (!storeCode || !details) return
 
-      // Persist to localStorage
+      if (!state.byStore) state.byStore = {}
+      state.byStore[storeCode] = details
+
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("userDetails", JSON.stringify(action.payload))
+          localStorage.setItem("userSlice", JSON.stringify(state))
         } catch (e) {
-          console.error("Failed to save userDetails", e)
+          console.error("Failed to save userSlice", e)
         }
       }
     },
-    clearUserDetails(state) {
-      state.details = null
+
+    // payload: storeCode
+    clearUserDetails(state, action) {
+      const storeCode = action.payload
+      if (!storeCode || !state.byStore) return
+
+      if (state.byStore[storeCode]) {
+        delete state.byStore[storeCode]
+      }
+
       if (typeof window !== "undefined") {
-        localStorage.removeItem("userDetails")
+        try {
+          localStorage.setItem("userSlice", JSON.stringify(state))
+        } catch (e) {
+          console.error("Failed to save userSlice", e)
+        }
+      }
+    },
+
+    // Optional helper if ever needed
+    clearAllUserDetails(state) {
+      state.byStore = {}
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("userSlice")
       }
     }
   }
 })
 
-export const { setUserDetails, clearUserDetails } = userSlice.actions
+export const { setUserDetails, clearUserDetails, clearAllUserDetails } =
+  userSlice.actions
 export default userSlice.reducer

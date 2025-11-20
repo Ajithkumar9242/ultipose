@@ -13,7 +13,8 @@ export function AddressModal({
   onAddAddress,
   onUpdateAddress,
   onDeleteAddress,
-  selectedAddressId
+  selectedAddressId,
+  defaultName = ""   // 🔥 NEW
 }) {
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingAddress, setEditingAddress] = useState(null)
@@ -22,12 +23,23 @@ export function AddressModal({
     name: "",
     address: "",
     landmark: "",
-    city: "Bangalore",
+    city: "",
     pincode: ""
   })
   const [isLocating, setIsLocating] = useState(false)
 
   if (!isOpen) return null
+
+  const resetForm = () => {
+    setFormData({
+      type: "home",
+      name: defaultName || "",
+      address: "",
+      landmark: "",
+      city: "",
+      pincode: ""
+    })
+  }
 
   const handleSubmit = () => {
     if (!formData.name || !formData.address || !formData.pincode) {
@@ -38,7 +50,7 @@ export function AddressModal({
     const addressData = {
       id: editingAddress?.id || Date.now().toString(),
       ...formData,
-      isDefault: addresses.length === 0 // First address is default
+      isDefault: addresses.length === 0 // First address is default (just label)
     }
 
     if (editingAddress) {
@@ -49,14 +61,7 @@ export function AddressModal({
 
     setShowAddForm(false)
     setEditingAddress(null)
-    setFormData({
-      type: "home",
-      name: "",
-      address: "",
-      landmark: "",
-      city: "Bangalore",
-      pincode: ""
-    })
+    resetForm()
   }
 
   const handleEdit = address => {
@@ -158,7 +163,11 @@ export function AddressModal({
             <>
               {/* Add New Address Button */}
               <Button
-                onClick={() => setShowAddForm(true)}
+                onClick={() => {
+                  setEditingAddress(null)
+                  resetForm()       // 🔥 prefill name from defaultName
+                  setShowAddForm(true)
+                }}
                 className="w-full mb-4 border-2 border-dashed border-orange-300 bg-orange-50 text-orange-600 hover:bg-orange-100"
                 variant="outline"
               >
@@ -363,14 +372,7 @@ export function AddressModal({
                   onClick={() => {
                     setShowAddForm(false)
                     setEditingAddress(null)
-                    setFormData({
-                      type: "home",
-                      name: "",
-                      address: "",
-                      landmark: "",
-                      city: "Bangalore",
-                      pincode: ""
-                    })
+                    resetForm()
                   }}
                   className="flex-1"
                 >
