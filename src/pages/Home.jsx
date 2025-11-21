@@ -27,7 +27,7 @@ const Home = () => {
 
           dispatch(setLocation({ type: activeTab, data: address }));
           // ⬇️ GO TO DYNAMIC STORE ROUTE INSTEAD OF /menu
-          navigate("/store/ultipos-test-store-1");
+          navigate("/s/ultipos-test-store-1");
         } catch (err) {
           console.error("Error reverse geocoding:", err);
           alert("Could not fetch address.");
@@ -43,7 +43,7 @@ const Home = () => {
     if (manualLocation.trim() === '') return;
     dispatch(setLocation({ type: 'manual', data: manualLocation }));
     // ⬇️ ALSO GO TO DYNAMIC STORE ROUTE HERE
-    navigate("/store/ultipos-test-store-1");
+    navigate("/s/ultipos-test-store-1");
   };
 
   return (

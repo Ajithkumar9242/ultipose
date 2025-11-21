@@ -118,7 +118,7 @@ const NotFound = () => {
 
         {/* CTA Button - Using Link from react-router-dom with Old Code Logic */}
         <Link 
-          to={`/store/${DEFAULT_STORE_CODE}`}
+          to={`/s/${DEFAULT_STORE_CODE}`}
           title="Return Home"
           className="group inline-flex items-center gap-2 px-8 py-3 bg-orange-500 text-white rounded-full font-semibold shadow-lg hover:bg-orange-600 hover:shadow-orange-500/50 transition-all duration-300 transform hover:-translate-y-1"
         >

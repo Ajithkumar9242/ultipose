@@ -6,6 +6,11 @@ import Cart from "./pages/Cart"
 import Checkout from "./pages/Checkout"
 import NotFound from "./pages/NotFound"
 
+
+// ⬇️ NEW imports
+import PaymentReturn from "./pages/PaymentReturn"
+import OrderStatusPage from "./pages/OrderStatus"
+
 function App() {
   return (
     <>
@@ -13,6 +18,11 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/menu" element={<Menuu />} />
         <Route path="/s/:storeCode" element={<Menuu />} />
+
+
+        {/* ⬇️ NEW ROUTES */}
+        <Route path="/payment-return" element={<PaymentReturn />} />
+        <Route path="/order-status/:orderId" element={<OrderStatusPage />} />
 
         {/* Redirect /store/:storeCode → /s/:storeCode */}
         <Route
