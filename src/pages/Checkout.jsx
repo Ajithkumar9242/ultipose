@@ -13,19 +13,22 @@ export default function Checkout() {
   const navigate = useNavigate()
   const [orderConfirmation, setOrderConfirmation] = useState(null)
 
-  // 🔹 Get currentStore + cart items for that store
-  const { cartItems, currentStore } = useSelector(state => {
+  // 🔹 Get currentStore + cart items + user FOR THAT STORE
+  const { cartItems, currentStore, savedUser } = useSelector(state => {
     const storeCode = state.cart.currentStore
     const itemsForStore = storeCode
       ? state.cart.byStore[storeCode] || []
       : []
+
+    const byStore = state.user.byStore || {}
+    const userForStore = storeCode ? byStore[storeCode] || null : null
+
     return {
       cartItems: itemsForStore,
-      currentStore: storeCode
+      currentStore: storeCode,
+      savedUser: userForStore
     }
   })
-
-  const savedUser = useSelector(state => state.user.details)
 
   const getCartTotal = () =>
     (cartItems || []).reduce((total, item) => {
@@ -38,9 +41,8 @@ export default function Checkout() {
     }, 0)
 
   const handleBack = () => {
-    // Go back to the respective store page if we know it
     if (currentStore) {
-      navigate(`/store/${currentStore}`)
+      navigate(`/s/${currentStore}`)
     } else {
       navigate(-1)
     }
@@ -53,15 +55,14 @@ export default function Checkout() {
       status: "confirmed"
     }
     setOrderConfirmation(completeOrderDetails)
-    dispatch(clearCart())  // clears cart for currentStore only
+    dispatch(clearCart()) // clears cart for currentStore only
     toast.success(`Order placed successfully! ID: ${orderDetails.orderId}`)
     localStorage.removeItem("preparationInstructions")
   }
 
-  // 🔹 If no items and no confirmed order → redirect back to store/home
   if ((!cartItems || cartItems.length === 0) && !orderConfirmation) {
     if (currentStore) {
-      navigate(`/store/${currentStore}`)
+      navigate(`/s/${currentStore}`)
     } else {
       navigate("/")
     }
@@ -80,7 +81,7 @@ export default function Checkout() {
   return (
     <OrderPage
       cartItems={cartItems}
-      userDetails={savedUser}
+      userDetails={savedUser}   // 🔹 per-store user
       onBack={handleBack}
       onPlaceOrder={handlePlaceOrder}
       total={getCartTotal()}

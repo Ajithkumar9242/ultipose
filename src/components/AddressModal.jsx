@@ -13,7 +13,8 @@ export function AddressModal({
   onAddAddress,
   onUpdateAddress,
   onDeleteAddress,
-  selectedAddressId
+  selectedAddressId,
+  defaultName = ""   // 🔥 NEW
 }) {
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingAddress, setEditingAddress] = useState(null)
@@ -25,8 +26,20 @@ export function AddressModal({
     city: "",
     pincode: ""
   })
+  const [isLocating, setIsLocating] = useState(false)
 
   if (!isOpen) return null
+
+  const resetForm = () => {
+    setFormData({
+      type: "home",
+      name: defaultName || "",
+      address: "",
+      landmark: "",
+      city: "",
+      pincode: ""
+    })
+  }
 
   const handleSubmit = () => {
     if (!formData.name || !formData.address || !formData.pincode) {
@@ -37,7 +50,7 @@ export function AddressModal({
     const addressData = {
       id: editingAddress?.id || Date.now().toString(),
       ...formData,
-      isDefault: addresses.length === 0 // First address is default
+      isDefault: addresses.length === 0 // First address is default (just label)
     }
 
     if (editingAddress) {
@@ -48,14 +61,7 @@ export function AddressModal({
 
     setShowAddForm(false)
     setEditingAddress(null)
-    setFormData({
-      type: "home",
-      name: "",
-      address: "",
-      landmark: "",
-      city: "Bangalore",
-      pincode: ""
-    })
+    resetForm()
   }
 
   const handleEdit = address => {
@@ -82,6 +88,59 @@ export function AddressModal({
     }
   }
 
+  // 🔹 Use browser location to autofill address fields
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.")
+      return
+    }
+
+    setIsLocating(true)
+
+    navigator.geolocation.getCurrentPosition(
+      async position => {
+        const { latitude, longitude } = position.coords
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          )
+          const data = await response.json()
+
+          const displayAddress = data.display_name || ""
+          const addr = data.address || {}
+
+          const city =
+            addr.city ||
+            addr.town ||
+            addr.village ||
+            addr.suburb ||
+            formData.city
+
+          const pincode = addr.postcode || formData.pincode
+
+          setFormData(prev => ({
+            ...prev,
+            address: displayAddress || prev.address,
+            city: city,
+            pincode: pincode
+          }))
+        } catch (err) {
+          console.error("Error reverse geocoding:", err)
+          alert("Could not fetch address from location.")
+        } finally {
+          setIsLocating(false)
+        }
+      },
+      error => {
+        console.log("Location denied or failed:", error)
+        alert(
+          "We couldn't get your location. Please allow location or fill address manually."
+        )
+        setIsLocating(false)
+      }
+    )
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -104,7 +163,11 @@ export function AddressModal({
             <>
               {/* Add New Address Button */}
               <Button
-                onClick={() => setShowAddForm(true)}
+                onClick={() => {
+                  setEditingAddress(null)
+                  resetForm()       // 🔥 prefill name from defaultName
+                  setShowAddForm(true)
+                }}
                 className="w-full mb-4 border-2 border-dashed border-orange-300 bg-orange-50 text-orange-600 hover:bg-orange-100"
                 variant="outline"
               >
@@ -232,11 +295,22 @@ export function AddressModal({
                 />
               </div>
 
-              {/* Address */}
+              {/* Address + Use my location */}
               <div>
-                <label className="block text-sm font-medium mb-2">
-                  Complete Address *
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium">
+                    Complete Address *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleUseCurrentLocation}
+                    className="flex items-center gap-1 text-xs text-orange-600 border border-orange-300 px-2 py-1 rounded-lg hover:bg-orange-50"
+                    disabled={isLocating}
+                  >
+                    <MapPin className="w-3 h-3" />
+                    {isLocating ? "Detecting..." : "Use my location"}
+                  </button>
+                </div>
                 <textarea
                   placeholder="House/Flat no, Building name, Street name, Area"
                   value={formData.address}
@@ -298,14 +372,7 @@ export function AddressModal({
                   onClick={() => {
                     setShowAddForm(false)
                     setEditingAddress(null)
-                    setFormData({
-                      type: "home",
-                      name: "",
-                      address: "",
-                      landmark: "",
-                      city: "Bangalore",
-                      pincode: ""
-                    })
+                    resetForm()
                   }}
                   className="flex-1"
                 >

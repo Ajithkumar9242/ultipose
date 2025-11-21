@@ -1,26 +1,23 @@
+// src/pages/Menuu.jsx
 "use client"
 import { useState, useMemo, useEffect } from "react"
-import { useParams } from "react-router-dom"
+import { useParams, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { toast } from "react-hot-toast"
 import { MenuSkeleton } from "../components/MenuSkeleton"
 import { MenuSidebarSkeleton } from "../components/MenuSidebarSkeleton"
 import { formatPriceAUD } from "../utils/currency"
 import { setLocation } from "../redux/locationSlice"
 import { setUserDetails as setUserDetailsRedux } from "../redux/userSlice"
-import { useNavigate } from "react-router-dom"
 
 import { ItemDetailsModal } from "../components/ItemDetailsModal"
 import { CartSidebar } from "../components/CartSidebar"
 import { AuthModal } from "../components/AuthModal"
-import { OrderPage } from "../components/OrderPage"
 import { mapPosMenuToClient } from "../data/posMapper"
 import { MenuCategorySidebar } from "../components/MenuCategorySidebar"
 import { MenuTopBar } from "../components/MenuTopBar"
 
 import { useSelector, useDispatch } from "react-redux"
-import { OrderConfirmation } from "../components/OrderConfirmation"
 import {
   addItem,
   removeItem,
@@ -30,18 +27,16 @@ import {
   setCurrentStore
 } from "../redux/store"
 
-
 import NotFound from "./NotFound"
+import api from "@/api"
 
 // 🔹 BASE URL & default store from env
-const POS_API_BASE = import.meta.env.VITE_POS_API_BASE
-const DEFAULT_STORE_CODE =
-  import.meta.env.VITE_DEFAULT_STORE_CODE || "ultipos-test-store-1"
+const DEFAULT_STORE_CODE = "ultipos-test-store-1"
 
 export default function Menuu() {
   const { storeCode } = useParams()
   const effectiveStoreCode = storeCode || DEFAULT_STORE_CODE
-  const POS_API_URL = `${POS_API_BASE}/${effectiveStoreCode}`
+  const POS_API_URL = `/ultipos-online/${effectiveStoreCode}`
 
   const [vegOnly, setVegOnly] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
@@ -67,34 +62,36 @@ export default function Menuu() {
 
   const navigate = useNavigate()
 
-
-  // 🔹 NEW: store info for logo/name/id
+  // store info for logo/name/id
   const [storeInfo, setStoreInfo] = useState(null)
 
-  // 🔹 NEW: control our “please share location” banner
+  // location banner
   const [showLocationPrompt, setShowLocationPrompt] = useState(false)
 
   const dispatch = useDispatch()
-const cartItems = useSelector(state => {
-  const currentStore = state.cart.currentStore
-  if (!currentStore) return []
-  return state.cart.byStore[currentStore] || []
-})
+
+  const cartItems = useSelector(state => {
+    const currentStore = state.cart.currentStore
+    if (!currentStore) return []
+    return state.cart.byStore[currentStore] || []
+  })
 
   const isCartOpen = useSelector(state => state.cart.isOpen)
- const location = useSelector(state => state.location)
-const savedUser = useSelector(state => state.user.details) // ⬅️ NEW
+  const location = useSelector(state => state.location)
 
+  // 🔹 PER-STORE saved user
+  const savedUser = useSelector(state => {
+    const byStore = state.user.byStore || {}
+    return byStore[effectiveStoreCode] || null
+  })
 
-  // 🔹 Decide when to show the location banner
+  // Show location banner if no location yet
   useEffect(() => {
-    // if no location stored, ask user nicely
     if (!location?.data) {
       setShowLocationPrompt(true)
     }
   }, [location?.data])
 
-  // 🔹 Called when user clicks "Use my location" in the banner
   const handleRequestLocation = () => {
     if (!navigator.geolocation) {
       toast.error("Geolocation is not supported by your browser.")
@@ -125,7 +122,6 @@ const savedUser = useSelector(state => state.user.details) // ⬅️ NEW
       },
       error => {
         console.log("Location denied or failed:", error)
-        // This is where Chrome shows "Location blocked" etc.
         toast.error(
           "Location access was blocked. Please allow location in your browser settings and try again."
         )
@@ -133,85 +129,75 @@ const savedUser = useSelector(state => state.user.details) // ⬅️ NEW
     )
   }
 
-  // 🔹 User chooses to skip location for now
   const handleSkipLocation = () => {
     setShowLocationPrompt(false)
   }
 
-useEffect(() => {
-  dispatch(setCurrentStore(effectiveStoreCode))
-}, [effectiveStoreCode, dispatch])
+  // set current store in Redux
+  useEffect(() => {
+    dispatch(setCurrentStore(effectiveStoreCode))
+  }, [effectiveStoreCode, dispatch])
 
+  // Fetch menu + store info with simple cache
+  useEffect(() => {
+    const cacheKey = `menu-cache:${effectiveStoreCode}`
 
-
-  // 🔹 Fetch menu + store info with simple cache
-useEffect(() => {
-  const cacheKey = `menu-cache:${effectiveStoreCode}`
-
-  const cached = sessionStorage.getItem(cacheKey)
-  if (cached) {
-    try {
-      const parsed = JSON.parse(cached)
-      setFoodItems(parsed.foodItems || [])
-      setMenuCategories(parsed.menuCategories || ["Menu"])
-      setStoreInfo(parsed.storeInfo || null)
-      setLoading(false)            // ✅ don't show skeleton again
-    } catch (e) {
-      console.error("Failed to parse cached menu", e)
+    const cached = sessionStorage.getItem(cacheKey)
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached)
+        setFoodItems(parsed.foodItems || [])
+        setMenuCategories(parsed.menuCategories || ["Menu"])
+        setStoreInfo(parsed.storeInfo || null)
+        setLoading(false)
+      } catch (e) {
+        console.error("Failed to parse cached menu", e)
+      }
     }
-  }
 
-  const fetchMenu = async () => {
-    try {
-      // if we already had cached data, don't show skeleton again
-      if (!cached) {
-        setLoading(true)
+    const fetchMenu = async () => {
+      try {
+        if (!cached) {
+          setLoading(true)
+        }
+        setStoreNotFound(false)
+
+        const res = await api.get(POS_API_URL)
+        console.log("Result", res)
+
+        if (res.status === 404) {
+          setStoreNotFound(true)
+          setFoodItems([])
+          setMenuCategories(["Menu"])
+          setStoreInfo(null)
+          return
+        }
+
+        const data = res.data
+        const mapped = mapPosMenuToClient(data)
+
+        setStoreInfo(data.store || null)
+        setFoodItems(mapped.foodItems)
+        setMenuCategories(mapped.menuCategories)
+
+        sessionStorage.setItem(
+          cacheKey,
+          JSON.stringify({
+            foodItems: mapped.foodItems,
+            menuCategories: mapped.menuCategories,
+            storeInfo: data.store || null
+          })
+        )
+      } catch (err) {
+        console.error(err)
+        toast.error("Failed to load menu")
+      } finally {
+        setLoading(false)
       }
-      setStoreNotFound(false)
-
-      const res = await fetch(POS_API_URL)
-
-      if (res.status === 404) {
-        setStoreNotFound(true)
-        setFoodItems([])
-        setMenuCategories(["Menu"])
-        setStoreInfo(null)
-        return
-      }
-
-      if (!res.ok) {
-        throw new Error("Failed to fetch menu")
-      }
-
-      const data = await res.json()
-
-      const mapped = mapPosMenuToClient(data)
-
-      setStoreInfo(data.store || null)
-      setFoodItems(mapped.foodItems)
-      setMenuCategories(mapped.menuCategories)
-
-      // ✅ store in cache for next time
-      sessionStorage.setItem(
-        cacheKey,
-        JSON.stringify({
-          foodItems: mapped.foodItems,
-          menuCategories: mapped.menuCategories,
-          storeInfo: data.store || null
-        })
-      )
-    } catch (err) {
-      console.error(err)
-      toast.error("Failed to load menu")
-    } finally {
-      setLoading(false)
     }
-  }
 
-  // always call fetchMenu (it will be fast if cached already set UI)
-  fetchMenu()
-}, [POS_API_URL, effectiveStoreCode])
-
+    fetchMenu()
+  }, [POS_API_URL, effectiveStoreCode])
 
   const getCartItemsCount = () =>
     cartItems.reduce((total, item) => total + (item.quantity || 1), 0)
@@ -270,32 +256,35 @@ useEffect(() => {
     setSelectedItem(item)
   }
 
-const handleCheckout = () => {
-  dispatch(setIsOpen(false))
+  const handleCheckout = () => {
+    dispatch(setIsOpen(false))
 
-  if (savedUser && savedUser.email && savedUser.phone) {
-    // ✅ User already known → skip AuthModal
-    setUserDetails(savedUser)
-    setShowOrderPage(true)
-    navigate("/checkout")   
-  } else {
-    // ❌ No saved user → ask once
-    setIsAuthOpen(true)
+    // ✅ savedUser is per-store now
+    if (savedUser && savedUser.email && savedUser.phone) {
+      setUserDetails(savedUser)
+      setShowOrderPage(true)
+      navigate("/checkout")
+    } else {
+      setIsAuthOpen(true)
+    }
   }
-}
-
 
   const handleBackToHome = () => {
     setOrderConfirmation(null)
   }
 
-const handleAuthComplete = details => {
-  setUserDetails(details)
-  dispatch(setUserDetailsRedux(details))
-  setIsAuthOpen(false)
-  navigate("/checkout")            // ✅ after entering details, go to /checkout
-}
-
+  const handleAuthComplete = details => {
+    // { name, email, phone } for THIS store only
+    setUserDetails(details)
+    dispatch(
+      setUserDetailsRedux({
+        storeCode: effectiveStoreCode,
+        details
+      })
+    )
+    setIsAuthOpen(false)
+    navigate("/checkout")
+  }
 
   const handlePlaceOrder = orderDetails => {
     const completeOrderDetails = {
@@ -317,20 +306,8 @@ const handleAuthComplete = details => {
     return <NotFound />
   }
 
-  // if (orderConfirmation) {
-  //   return (
-  //     <OrderConfirmation
-  //       orderDetails={orderConfirmation}
-  //       onBackToHome={handleBackToHome}
-  //     />
-  //   )
-  // }
-
- 
-
   return (
     <div className="min-h-screen bg-white">
-      {/* 🔹 Location banner shown when user first lands on store page */}
       {showLocationPrompt && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-gray-900 text-white px-4 py-3">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -525,7 +502,7 @@ const handleAuthComplete = details => {
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         onAuthComplete={handleAuthComplete}
-        initialDetails={savedUser} 
+        initialDetails={savedUser}
       />
     </div>
   )
