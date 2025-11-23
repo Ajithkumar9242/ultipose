@@ -21,10 +21,11 @@ import { formatPriceAUD } from "../utils/currency"
 
 export function OrderPage({
   cartItems,
-  userDetails, // ✅ store-specific user, passed from Checkout
+  userDetails,   // ✅ store-specific user
   onBack,
   onPlaceOrder,
-  total
+  total,
+  placingOrder = false      // 🔥 NEW: from Checkout
 }) {
   const [appliedCoupon, setAppliedCoupon] = useState(null)
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false)
@@ -229,6 +230,7 @@ export function OrderPage({
     localStorage.removeItem("itemNotes")
   }
 
+
   const startEditingNote = item => {
     setEditingNoteId(item.id)
     setNoteDrafts(prev => ({
@@ -272,7 +274,7 @@ export function OrderPage({
           <Button variant="ghost" size="sm" onClick={onBack}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h1 className="text-lg font-semibold">My Order</h1>
+          <h1 className="text-lg font-semibold">Checkout</h1>
         </div>
       </div>
 
@@ -573,11 +575,12 @@ export function OrderPage({
 
             {/* Make Payment Button */}
             <Button
-              onClick={handlePlaceOrderInternal}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 text-lg font-medium rounded-lg"
-            >
-              MAKE PAYMENT
-            </Button>
+          onClick={handlePlaceOrderInternal}
+          disabled={placingOrder || items.length === 0}
+          className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 text-lg font-medium rounded-lg disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {placingOrder ? "PROCESSING..." : "MAKE PAYMENT"}
+        </Button>
           </div>
         </div>
       </div>
