@@ -45,10 +45,11 @@ export default function OrderStatusPage() {
 
       let res
       try {
-        res = await api.get(`/public-orders/${orderId}`)
+        res = await api.get(`/orders/${orderId}`)
+        
       } catch (e) {
         // fallback like company code
-        res = await api.get(`/orders/${orderId}`)
+        res = await api.get(`/public-orders/${orderId}`)
       }
 
       const payload =
