@@ -46,7 +46,6 @@ const cartSlice = createSlice({
   name: "cart",
   initialState: loadCartState(),
   reducers: {
-    // 🔹 Set which store we are currently on
     setCurrentStore(state, action) {
       const storeCode = action.payload
       state.currentStore = storeCode
@@ -98,10 +97,21 @@ const cartSlice = createSlice({
       }
     },
 
+    // 🔹 clears cart for *current* store (used in PaymentReturn)
     clearCart(state) {
       const storeCode = state.currentStore
       if (!storeCode) return
       state.byStore[storeCode] = []
+    },
+
+    // 🔹 NEW: clear cart for a specific storeCode (used in OrderStatus)
+    clearCartForStore(state, action) {
+      const storeCode = action.payload
+      if (!storeCode) return
+      if (!state.byStore) return
+      if (state.byStore[storeCode]) {
+        state.byStore[storeCode] = []
+      }
     },
 
     setIsOpen(state, action) {
@@ -110,11 +120,13 @@ const cartSlice = createSlice({
   }
 })
 
+
 export const {
   addItem,
   removeItem,
   updateQuantity,
   clearCart,
+  clearCartForStore,   // ⬅️ export this
   setIsOpen,
   setCurrentStore
 } = cartSlice.actions
@@ -128,6 +140,8 @@ export const store = configureStore({
 })
 
 // 🔹 Persist the *entire* cart slice (all stores) on every state change
+
+// persist cartSlice as before
 store.subscribe(() => {
   try {
     const cartState = store.getState().cart

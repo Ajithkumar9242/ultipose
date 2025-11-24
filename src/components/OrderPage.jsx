@@ -110,6 +110,11 @@ export function OrderPage({
     return sum + (base + addOns) * (item.quantity || 1)
   }, 0)
 
+  // 🔹 Right now backend owns the real tax calculation (single `tax` field).
+  // On checkout UI we just show item total & discount; final tax comes from API.
+  const tax = 0
+
+
   const cgst = Math.round(computedTotal * 0.025)
   const sgst = Math.round(computedTotal * 0.025)
 
@@ -126,7 +131,9 @@ export function OrderPage({
   }
 
   const discount = calculateDiscount()
-  const finalTotal = computedTotal + cgst + sgst - discount
+  // clamp at 0 so we never show negative amounts
+  const finalTotal = Math.max(0, computedTotal - discount)
+
 
   // 🔹 Address handlers
 
@@ -210,20 +217,20 @@ export function OrderPage({
   }
 
   const handlePlaceOrderInternal = () => {
-    const orderDetails = {
+        const orderDetails = {
       items,
       userDetails: effectiveUser,
       deliveryAddress:
         locationForStore.data || selectedAddress?.address || "No address",
       subtotal: computedTotal,
-      cgst,
-      sgst,
+      tax,                 // currently 0; real tax comes from backend
       discount,
       total: finalTotal,
       appliedCoupon,
       orderId: `MF${Date.now()}`,
       estimatedDelivery: "45-50 mins"
     }
+
     onPlaceOrder(orderDetails)
 
     setNoteDrafts({})
@@ -509,25 +516,22 @@ export function OrderPage({
           <div className="space-y-6">
             <div className="bg-white rounded-lg p-6">
               <h2 className="text-lg font-semibold mb-4">Bill details</h2>
-              <div className="space-y-3 text-sm">
+                            <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Item Total</span>
                   <span className="font-medium">
                     {formatPriceAUD(computedTotal)}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">CGST</span>
+
+                {/* If in future you get a `tax` preview from API, plug it here */}
+                {/* <div className="flex justify-between">
+                  <span className="text-gray-600">Tax</span>
                   <span className="font-medium">
-                    {formatPriceAUD(cgst)}
+                    {formatPriceAUD(tax)}
                   </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">SGST</span>
-                  <span className="font-medium">
-                    {formatPriceAUD(sgst)}
-                  </span>
-                </div>
+                </div> */}
+
                 {discount > 0 && (
                   <div className="flex justify-between text-green-600">
                     <span>Discount ({appliedCoupon?.code})</span>
@@ -536,11 +540,13 @@ export function OrderPage({
                     </span>
                   </div>
                 )}
+
                 <div className="border-t pt-3 flex justify-between font-semibold text-lg">
                   <span>To Pay</span>
                   <span>{formatPriceAUD(Math.round(finalTotal))}</span>
                 </div>
               </div>
+
             </div>
 
             {/* Apply Store Offer */}

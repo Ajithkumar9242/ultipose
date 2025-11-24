@@ -22,6 +22,8 @@ import {
   FileDown
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useDispatch } from "react-redux"
+import { clearCartForStore } from "@/redux/store"
 
 const STATUS_COLOR_BADGE = {
   PAID: "bg-green-100 text-green-700",
@@ -35,7 +37,6 @@ const STATUS_COLOR_BADGE = {
   CANCELLED: "bg-red-100 text-red-700"
 }
 
-// UI stages for the horizontal tracker
 const UI_STAGES = [
   { key: "confirmed", label: "Order confirmed", icon: CheckCircle2 },
   { key: "preparing", label: "Preparing order", icon: ChefHat },
@@ -43,7 +44,6 @@ const UI_STAGES = [
   { key: "completed", label: "Completed", icon: Package }
 ]
 
-// Map backend status → UI stage key
 function mapBackendStatusToUiKey(status) {
   switch (status) {
     case "CONFIRMED":
@@ -66,7 +66,6 @@ function mapBackendStatusToUiKey(status) {
   }
 }
 
-// Pretty text for notification events
 function formatUpdateEvent(event) {
   if (!event) return ""
   if (event.startsWith("action:")) {
@@ -90,6 +89,7 @@ function formatUpdateEvent(event) {
 export default function OrderStatusPage() {
   const { orderId } = useParams()
   const navigate = useNavigate()
+  const dispatch = useDispatch()
 
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -105,11 +105,9 @@ export default function OrderStatusPage() {
       }
 
       let res
-    
       try {
         res = await api.get(`/orders/${orderId}`)
       } catch (e) {
-        // fallback like company code
         res = await api.get(`/public-orders/${orderId}`)
       }
 
@@ -117,6 +115,12 @@ export default function OrderStatusPage() {
         res.data?.data?.order || res.data?.order || res.data || null
 
       setOrder(payload || null)
+
+      // 🔥 IMPORTANT: once we know which store this order belongs to,
+      // clear the cart for that store (Redux + localStorage via subscribe)
+      if (payload?.storeCode) {
+        dispatch(clearCartForStore(payload.storeCode))
+      }
     } catch (err) {
       console.warn("order fetch failed", err)
       if (isInitial) {
@@ -140,8 +144,7 @@ export default function OrderStatusPage() {
     return () => clearInterval(intervalRef.current)
   }, [orderId])
 
-  // -------- Error / loading states --------
-
+  // ---------- error / loading ----------
   if (!orderId) {
     return (
       <FullScreenMessage
@@ -180,8 +183,7 @@ export default function OrderStatusPage() {
     )
   }
 
-  // -------- Normal state --------
-
+  // ---------- normal state ----------
   const status = order.status || "PENDING"
   const uiStatusKey = mapBackendStatusToUiKey(status)
   const isCancelled =
@@ -193,7 +195,6 @@ export default function OrderStatusPage() {
     status === "AWAITING_PAYMENT" ||
     status === "PENDING"
 
-  // header colors
   const headerBg = isCancelled
     ? "bg-red-500"
     : isAwaiting
@@ -223,7 +224,6 @@ export default function OrderStatusPage() {
     currency: (order.totals && order.totals.currency) || "AUD"
   }
 
-  // discount from evalResult if present
   const firstEvent =
     order.payment?.events && order.payment.events.length
       ? order.payment.events[0]
@@ -234,7 +234,6 @@ export default function OrderStatusPage() {
       ? evalResult.totalDiscountCents
       : 0
 
-  // UI progress stage
   const activeStages = UI_STAGES.map(s => s.key)
   const currentStageIndex = activeStages.indexOf(uiStatusKey)
   const clampedIndex =
@@ -244,7 +243,6 @@ export default function OrderStatusPage() {
       ? 0
       : (clampedIndex / (UI_STAGES.length - 1 || 1)) * 100
 
-  // "estimated" text – just friendly, not strict timer
   let etaText = ""
   if (isCancelled) {
     etaText = "This order has been cancelled."
@@ -333,7 +331,7 @@ export default function OrderStatusPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Colored header */}
+      {/* header */}
       <div className={headerBg + " text-white shadow-sm"}>
         <div className="max-w-5xl mx-auto px-4 py-4 sm:py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -386,12 +384,12 @@ export default function OrderStatusPage() {
         </div>
       </div>
 
-      {/* Main content (used as invoice content too) */}
+      {/* main content / invoice area */}
       <div
         className="max-w-5xl mx-auto px-4 py-6 space-y-6"
         ref={invoiceRef}
       >
-        {/* TRACKER CARD */}
+        {/* tracker card */}
         <div className="bg-white rounded-2xl shadow-sm border p-5 space-y-4 animate-[fadeInUp_0.35s_ease-out]">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
@@ -417,7 +415,6 @@ export default function OrderStatusPage() {
             </div>
           </div>
 
-          {/* Horizontal status timeline */}
           {!isCancelled && (
             <div className="relative mt-4">
               <div className="absolute top-6 left-6 right-6 h-0.5 bg-gray-200 -z-10">
@@ -475,7 +472,6 @@ export default function OrderStatusPage() {
             </div>
           )}
 
-          {/* Status message box */}
           <div
             className={`mt-4 p-4 rounded-lg text-sm ${
               isCancelled
@@ -500,11 +496,10 @@ export default function OrderStatusPage() {
           </div>
         </div>
 
-        {/* 2-col layout: items + customer/billing */}
+        {/* layout: items + customer/billing */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 md:gap-6">
-          {/* Left: items + bill */}
           <div className="md:col-span-3 space-y-4">
-            {/* Items */}
+            {/* items */}
             <div className="bg-white rounded-2xl shadow-sm border p-5 animate-[fadeInUp_0.35s_ease-out_0.05s]">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
@@ -552,7 +547,7 @@ export default function OrderStatusPage() {
               </div>
             </div>
 
-            {/* Bill summary */}
+            {/* bill summary */}
             <div className="bg-white rounded-2xl shadow-sm border p-5 animate-[fadeInUp_0.35s_ease-out_0.1s]">
               <p className="text-xs font-medium text-gray-500 uppercase mb-3">
                 Bill summary
@@ -584,9 +579,8 @@ export default function OrderStatusPage() {
             </div>
           </div>
 
-          {/* Right: customer + payment */}
+          {/* right: customer + payment */}
           <div className="md:col-span-2 space-y-4">
-            {/* Customer details */}
             <div className="bg-white rounded-2xl shadow-sm border p-5 animate-[fadeInUp_0.35s_ease-out_0.08s]">
               <p className="text-xs font-medium text-gray-500 uppercase mb-3">
                 Customer & delivery
@@ -633,7 +627,6 @@ export default function OrderStatusPage() {
               </div>
             </div>
 
-            {/* Payment summary */}
             <div className="bg-white rounded-2xl shadow-sm border p-5 animate-[fadeInUp_0.35s_ease-out_0.12s]">
               <p className="text-xs font-medium text-gray-500 uppercase mb-3">
                 Payment summary
@@ -662,7 +655,6 @@ export default function OrderStatusPage() {
           </div>
         </div>
 
-        {/* Activity log from notifications */}
         {!!updates.length && (
           <div className="bg-white rounded-2xl shadow-sm border p-5 animate-[fadeInUp_0.35s_ease-out_0.15s]">
             <p className="text-xs font-medium text-gray-500 uppercase mb-4">
@@ -707,7 +699,6 @@ export default function OrderStatusPage() {
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-3 sm:justify-end mt-2">
           <Button
             variant="outline"
@@ -728,7 +719,6 @@ export default function OrderStatusPage() {
         </div>
       </div>
 
-      {/* tiny keyframes */}
       <style>{`
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(6px); }
@@ -743,7 +733,6 @@ export default function OrderStatusPage() {
   )
 }
 
-// reusable row for bill summary
 function Row({ label, children, accent }) {
   const accentClass =
     accent === "green"
@@ -759,7 +748,6 @@ function Row({ label, children, accent }) {
   )
 }
 
-// simple user icon without extra import
 function UsersIcon() {
   return (
     <svg
@@ -776,7 +764,6 @@ function UsersIcon() {
   )
 }
 
-// generic fullscreen message component
 function FullScreenMessage({
   title,
   description,
