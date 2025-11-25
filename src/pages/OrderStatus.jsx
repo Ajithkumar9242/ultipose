@@ -218,13 +218,37 @@ export default function OrderStatusPage() {
   const storeName = order.storeId?.name || order.storeCode || "Store"
   const customer = order.customer || {}
 
-  const totals = order.totals || {
-    subtotal: order.subtotal || 0,
-    tax: order.tax || 0,
-    deliveryFee: order.deliveryFee || 0,
-    total: order.total || 0,
-    currency: (order.totals && order.totals.currency) || "AUD"
-  }
+  // ---- totals from API (all in cents) ----
+  const rawTotals = order.totals || {}
+
+  const subtotalCents =
+    typeof rawTotals.subtotal === "number"
+      ? rawTotals.subtotal
+      : order.subtotal || 0
+
+  const taxCents =
+    typeof rawTotals.tax === "number"
+      ? rawTotals.tax
+      : order.tax || 0
+
+  const deliveryCents =
+    typeof rawTotals.deliveryFee === "number"
+      ? rawTotals.deliveryFee
+      : order.deliveryFee || 0
+
+  const totalCents =
+    typeof rawTotals.total === "number"
+      ? rawTotals.total
+      : order.total || subtotalCents + taxCents + deliveryCents
+
+  const currency = rawTotals.currency || "AUD"
+
+  // 🔥 this is what the gateway actually charged (Worldline)
+  const paidAmountCents =
+    typeof order.payment?.amount === "number"
+      ? order.payment.amount
+      : totalCents
+
 
   const firstEvent =
     order.payment?.events && order.payment.events.length
@@ -235,6 +259,23 @@ export default function OrderStatusPage() {
     evalResult?.totalDiscountCents != null
       ? evalResult.totalDiscountCents
       : 0
+
+      // ✅ Make a safe display breakdown that matches what was paid
+const computedFromTotals =
+  subtotalCents + taxCents + deliveryCents - discountCents
+
+// Only trust backend breakdown if it exactly matches the paid amount
+const hasValidBreakdown =
+  computedFromTotals > 0 && computedFromTotals === paidAmountCents
+
+// If mismatch → just show everything as based on paid amount
+const itemTotalDisplayCents = hasValidBreakdown
+  ? subtotalCents
+  : paidAmountCents + discountCents
+
+const taxDisplayCents = hasValidBreakdown ? taxCents : 0
+const deliveryDisplayCents = hasValidBreakdown ? deliveryCents : 0
+
 
   const activeStages = UI_STAGES.map(s => s.key)
   const currentStageIndex = activeStages.indexOf(uiStatusKey)
@@ -406,9 +447,10 @@ export default function OrderStatusPage() {
               </p>
             </div>
             <div className="text-right text-sm">
-              <p className="font-semibold text-gray-900">
-                Total Paid: {formatPriceAUD(totals.total)}
-              </p>
+<p className="font-semibold text-gray-900">
+  Total Paid: {formatPriceAUD(paidAmountCents)}
+</p>
+
               {discountCents > 0 && (
                 <p className="text-xs text-green-600">
                   Discount applied: {formatPriceAUD(discountCents)}
@@ -554,30 +596,45 @@ export default function OrderStatusPage() {
               <p className="text-xs font-medium text-gray-500 uppercase mb-3">
                 Bill summary
               </p>
-              <div className="space-y-2 text-sm">
-                <Row label="Item total">
-                  {formatPriceAUD(totals.subtotal || 0)}
-                </Row>
-                <Row label="Tax">
-                  {formatPriceAUD(totals.tax || 0)}
-                </Row>
-                <Row label="Delivery">
-                  {formatPriceAUD(totals.deliveryFee || 0)}
-                </Row>
-                {discountCents > 0 && (
-                  <Row label="Discount" accent="green">
-                    -{formatPriceAUD(discountCents)}
-                  </Row>
-                )}
-                <div className="border-t pt-3 mt-1 flex justify-between items-center text-sm">
-                  <span className="font-semibold text-gray-900">
-                    Total paid
-                  </span>
-                  <span className="text-lg font-bold text-gray-900">
-                    {formatPriceAUD(totals.total || 0)}
-                  </span>
-                </div>
-              </div>
+<div className="space-y-2 text-sm">
+  {/* Item total (safe) */}
+  <Row label="Item total">
+    {formatPriceAUD(itemTotalDisplayCents)}
+  </Row>
+
+  {/* Only show tax if it makes sense */}
+  {taxDisplayCents > 0 && (
+    <Row label="Tax">
+      {formatPriceAUD(taxDisplayCents)}
+    </Row>
+  )}
+
+  {/* Only show delivery if it makes sense */}
+  {deliveryDisplayCents > 0 && (
+    <Row label="Delivery">
+      {formatPriceAUD(deliveryDisplayCents)}
+    </Row>
+  )}
+
+  {/* Discount from evalResult if any */}
+  {discountCents > 0 && (
+    <Row label="Discount" accent="green">
+      -{formatPriceAUD(discountCents)}
+    </Row>
+  )}
+
+  {/* Always show what was actually paid to ANZ */}
+  <div className="border-t pt-3 mt-1 flex justify-between items-center text-sm">
+    <span className="font-semibold text-gray-900">
+      Total paid
+    </span>
+    <span className="text-lg font-bold text-gray-900">
+      {formatPriceAUD(paidAmountCents)}
+    </span>
+  </div>
+</div>
+
+
             </div>
           </div>
 
@@ -641,13 +698,14 @@ export default function OrderStatusPage() {
                   </span>
                 </p>
                 <p className="text-gray-700">
-                  Amount captured:{" "}
-                  <span className="font-medium">
-                    {order.payment?.amount != null
-                      ? formatPriceAUD(order.payment.amount)
-                      : formatPriceAUD(totals.total || 0)}
-                  </span>
-                </p>
+  Amount captured:{" "}
+  <span className="font-medium">
+    {order.payment?.amount != null
+      ? formatPriceAUD(order.payment.amount)
+      : formatPriceAUD(paidAmountCents)}
+  </span>
+</p>
+
               </div>
               <p className="text-[11px] text-gray-400 mt-3">
                 This is a read-only summary based on the latest payment

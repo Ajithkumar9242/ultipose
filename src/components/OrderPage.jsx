@@ -18,6 +18,7 @@ import { useSelector, useDispatch } from "react-redux"
 import { setLocation } from "@/redux/locationSlice"
 import { updateQuantity, removeItem } from "@/redux/store"
 import { formatPriceAUD } from "../utils/currency"
+import { toast } from "react-hot-toast"
 
 export function OrderPage({
   cartItems,
@@ -64,6 +65,9 @@ export function OrderPage({
       setHasAutoOpenedAddressModal(true)
     }
   }, [locationForStore?.data, hasAutoOpenedAddressModal])
+
+
+
 
   // Local copy of cart items
   const [items, setItems] = useState(cartItems)
@@ -118,19 +122,42 @@ export function OrderPage({
   const cgst = Math.round(computedTotal * 0.025)
   const sgst = Math.round(computedTotal * 0.025)
 
-  const calculateDiscount = () => {
-    if (!appliedCoupon) return 0
-    if (appliedCoupon.type === "fixed") {
-      return appliedCoupon.discount
-    } else {
-      const discount = (computedTotal * appliedCoupon.discount) / 100
-      return appliedCoupon.maxDiscount
-        ? Math.min(discount, appliedCoupon.maxDiscount)
-        : discount
-    }
+// 🔹 Reusable discount calculator for any coupon object
+
+const calculateDiscount = coupon => {
+  if (!coupon) return 0
+
+  // 🚫 MAIN RULE: if cart total is $10 or below (1000 cents), NO discount
+  if (computedTotal <= 1000) {
+    return 0
   }
 
-  const discount = calculateDiscount()
+  let rawDiscount = 0
+
+  if (coupon.type === "fixed") {
+    // e.g. 1000 = $10 OFF
+    rawDiscount = coupon.discount || 0
+  } else {
+    const percent = coupon.discount || 0
+    rawDiscount = (computedTotal * percent) / 100
+  }
+
+  if (coupon.maxDiscount) {
+    rawDiscount = Math.min(rawDiscount, coupon.maxDiscount)
+  }
+
+  return Math.min(rawDiscount, computedTotal)
+}
+
+
+
+
+
+
+
+
+  const discount = calculateDiscount(appliedCoupon)
+
   // clamp at 0 so we never show negative amounts
   const finalTotal = Math.max(0, computedTotal - discount)
 
@@ -179,6 +206,39 @@ export function OrderPage({
     }
   }
 
+
+const handleApplyCoupon = coupon => {
+  if (!coupon) return
+
+  // 🚫 Rule 1: minimum cart value
+if (computedTotal <= 1000) {
+  toast.error("This offer is valid only for orders above $10.")
+  return
+}
+
+
+  const potentialDiscount = calculateDiscount(coupon)
+
+  // no real benefit or negative case
+  if (potentialDiscount <= 0) {
+    toast.error("This offer can't be applied to the current cart.")
+    return
+  }
+
+  // 🚫 safety: discount should never exceed cart total (extra guard)
+  if (potentialDiscount > computedTotal) {
+    toast.error("This offer can't be applied for this cart value.")
+    return
+  }
+
+  // ✅ safe to apply
+  setAppliedCoupon(coupon)
+  setIsCouponModalOpen(false)
+}
+
+
+
+
   const handleDetectLocationAgain = () => {
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your browser")
@@ -216,26 +276,30 @@ export function OrderPage({
     )
   }
 
-  const handlePlaceOrderInternal = () => {
-        const orderDetails = {
-      items,
-      userDetails: effectiveUser,
-      deliveryAddress:
-        locationForStore.data || selectedAddress?.address || "No address",
-      subtotal: computedTotal,
-      tax,                 // currently 0; real tax comes from backend
-      discount,
-      total: finalTotal,
-      appliedCoupon,
-      orderId: `MF${Date.now()}`,
-      estimatedDelivery: "45-50 mins"
-    }
+const handlePlaceOrderInternal = () => {
+  // ❗ only keep coupon if it actually gives a discount
+  const effectiveAppliedCoupon = discount > 0 ? appliedCoupon : null
 
-    onPlaceOrder(orderDetails)
-
-    setNoteDrafts({})
-    localStorage.removeItem("itemNotes")
+  const orderDetails = {
+    items,
+    userDetails: effectiveUser,
+    deliveryAddress:
+      locationForStore.data || selectedAddress?.address || "No address",
+    subtotal: computedTotal,
+    tax,                 // currently 0; real tax comes from backend
+    discount,
+    total: finalTotal,
+    appliedCoupon: effectiveAppliedCoupon,
+    orderId: `MF${Date.now()}`,
+    estimatedDelivery: "45-50 mins"
   }
+
+  onPlaceOrder(orderDetails)
+
+  setNoteDrafts({})
+  localStorage.removeItem("itemNotes")
+}
+
 
 
   const startEditingNote = item => {
@@ -272,6 +336,14 @@ export function OrderPage({
       return copy
     })
   }
+
+ useEffect(() => {
+  if (appliedCoupon && computedTotal <= 1000) {
+    setAppliedCoupon(null)
+    toast("Coupon removed: minimum order value is above $10.")
+  }
+}, [computedTotal, appliedCoupon])
+
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -550,34 +622,38 @@ export function OrderPage({
             </div>
 
             {/* Apply Store Offer */}
-            <div className="bg-white rounded-lg p-4">
-              <button
-                onClick={() => setIsCouponModalOpen(true)}
-                className="w-full flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <span className="text-green-600 font-bold text-sm">
-                      %
-                    </span>
-                  </div>
-                  <span className="font-medium text-green-600">
-                    Apply Store offer
-                  </span>
-                </div>
-                <span className="text-green-600 text-xl">›</span>
-              </button>
-              {appliedCoupon && (
-                <div className="mt-3 p-3 bg-green-50 rounded-lg">
-                  <p className="text-sm font-medium text-green-700">
-                    {appliedCoupon.code} Applied
-                  </p>
-                  <p className="text-xs text-green-600">
-                    You saved {formatPriceAUD(Math.round(discount))}!
-                  </p>
-                </div>
-              )}
-            </div>
+            {/* Apply Store Offer – only show above $10 */}
+{computedTotal > 1000 && (
+  <div className="bg-white rounded-lg p-4">
+    <button
+      onClick={() => setIsCouponModalOpen(true)}
+      className="w-full flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors"
+    >
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+          <span className="text-green-600 font-bold text-sm">
+            %
+          </span>
+        </div>
+        <span className="font-medium text-green-600">
+          Apply Store offer
+        </span>
+      </div>
+      <span className="text-green-600 text-xl">›</span>
+    </button>
+    {appliedCoupon && (
+      <div className="mt-3 p-3 bg-green-50 rounded-lg">
+        <p className="text-sm font-medium text-green-700">
+          {appliedCoupon.code} Applied
+        </p>
+        <p className="text-xs text-green-600">
+          You saved {formatPriceAUD(Math.round(discount))}!
+        </p>
+      </div>
+    )}
+  </div>
+)}
+
 
             {/* Make Payment Button */}
             <Button
@@ -606,16 +682,14 @@ export function OrderPage({
 
       {/* Coupon Modal */}
       <CouponModal
-        isOpen={isCouponModalOpen}
-        onClose={() => setIsCouponModalOpen(false)}
-        onApplyCoupon={coupon => {
-          setAppliedCoupon(coupon)
-          setIsCouponModalOpen(false)
-        }}
-        currentTotal={computedTotal}
-        appliedCoupon={appliedCoupon}
-        storeCode={currentStore}
-      />
+  isOpen={isCouponModalOpen}
+  onClose={() => setIsCouponModalOpen(false)}
+  onApplyCoupon={handleApplyCoupon}      // 🔥 use validator
+  currentTotal={computedTotal}
+  appliedCoupon={appliedCoupon}
+  storeCode={currentStore}
+/>
+
     </div>
   )
 }
