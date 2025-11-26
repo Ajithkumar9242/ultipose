@@ -491,12 +491,17 @@ const Home = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {restaurantData.map(rest => (
-              <RestaurantCard
-                key={rest.id}
-                data={rest}
-                onClick={() => navigate(`/s/store-${rest.id}`)}
-              />
-            ))}
+  <RestaurantCard
+    key={rest.id}
+    data={rest}
+    onClick={() =>
+      rest.storeCode
+        ? navigate(`/s/${rest.storeCode}`)     // 👈 ultipos-test-store-1 / 2
+        :   navigate("/notfound")    // 👈 fallback for dummy stores
+    }
+  />
+))}
+
           </div>
         </main>
       ) : (

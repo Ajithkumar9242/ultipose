@@ -3,7 +3,8 @@
 const restaurantData = [
   {
     id: 1,
-    name: "Pizza Hut",
+    name: "Ultipos Test Store 1",
+    storeCode: "ultipos-test-store-1",   // 👈 add this
     image:
       "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?auto=format&fit=crop&w=800&q=80",
     rating: 4.5,
@@ -14,7 +15,8 @@ const restaurantData = [
   },
   {
     id: 2,
-    name: "Burger King",
+    name: "Ultipos Test Store 2",
+    storeCode: "ultipos-test-store-2",   // 👈 add this
     image:
       "https://images.unsplash.com/photo-1571091718767-18b5b1457add?auto=format&fit=crop&w=800&q=80",
     rating: 4.2,
