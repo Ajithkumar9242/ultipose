@@ -9,6 +9,7 @@ import { MenuSidebarSkeleton } from "../components/MenuSidebarSkeleton"
 import { formatPriceAUD } from "../utils/currency"
 import { setLocation } from "../redux/locationSlice"
 import { setUserDetails as setUserDetailsRedux } from "../redux/userSlice"
+import LoadingScreen from "../components/LoadingScreen"
 
 import { ItemDetailsModal } from "../components/ItemDetailsModal"
 import { CartSidebar } from "../components/CartSidebar"
@@ -302,11 +303,19 @@ export default function Menuu() {
 
   const categories = [...new Set(foodItems.map(item => item.category))]
 
+
+
+    if (loading) {
+    return <LoadingScreen />
+  }
+
   if (storeNotFound) {
     return <NotFound />
   }
 
   return (
+
+    
     <div className="min-h-screen bg-white">
       {showLocationPrompt && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-gray-900 text-white px-4 py-3">
@@ -350,15 +359,13 @@ export default function Menuu() {
       />
 
       <div className="flex max-w-7xl mx-auto">
-        {loading ? (
-          <MenuSidebarSkeleton />
-        ) : (
+       
           <MenuCategorySidebar
             menuCategories={menuCategories}
             selectedCategory={selectedCategory}
             onSelectCategory={setSelectedCategory}
           />
-        )}
+ 
 
         <main className="flex-1 p-4 lg:p-6">
           <div className="mb-6">
@@ -366,15 +373,11 @@ export default function Menuu() {
               {selectedCategory === "Menu" ? "All Items" : selectedCategory}
             </h2>
             <p className="text-sm lg:text-base text-gray-600">
-              {loading
-                ? "Finding the best dishes for you..."
-                : `${filteredItems.length} Items`}
+              { `${filteredItems.length} Items`}
             </p>
           </div>
 
-          {loading ? (
-            <MenuSkeleton />
-          ) : (
+       
             <>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
                 {filteredItems.map(item => (
@@ -475,7 +478,7 @@ export default function Menuu() {
                 </div>
               )}
             </>
-          )}
+          
         </main>
       </div>
 

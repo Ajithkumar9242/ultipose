@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatPriceAUD } from "../utils/currency"
 import api from "@/api"
+import CouponAnimation from "./CouponAnimation"
 
 // 🔹 Map backend promotion -> frontend coupon object
 const mapPromotionToCoupon = promo => {
@@ -132,148 +133,150 @@ export function CouponModal({
         </div>
 
         <div className="p-4">
-          {/* Manual Coupon Code Entry */}
-          <div className="mb-6">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter coupon code"
-                value={couponCode}
-                onChange={e => setCouponCode(e.target.value.toUpperCase())}
-                className="flex-1"
-              />
-              <Button
-                onClick={handleApplyCouponCode}
-                disabled={!couponCode}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                Apply
-              </Button>
-            </div>
-          </div>
+  {/* Manual Coupon Code Entry */}
+  <div className="mb-6">
+    <div className="flex gap-2">
+      <Input
+        placeholder="Enter coupon code"
+        value={couponCode}
+        onChange={e => setCouponCode(e.target.value.toUpperCase())}
+        className="flex-1"
+        disabled={loading}              // 🔒 prevent typing while loading (optional)
+      />
+      <Button
+        onClick={handleApplyCouponCode}
+        disabled={!couponCode || loading}  // 🔒 disable apply while loading
+        className="bg-green-600 hover:bg-green-700 text-white"
+      >
+        Apply
+      </Button>
+    </div>
+  </div>
 
-          {/* Loading / Error states */}
-          {loading && (
-            <p className="text-sm text-gray-500 mb-3">
-              Loading offers for this store...
-            </p>
-          )}
-          {error && (
-            <p className="text-sm text-red-500 mb-3">
-              {error}
-            </p>
-          )}
+  {/* 🔥 IF LOADING → show animated coupon loader & skip the rest */}
+  {loading ? (
+    <CouponAnimation />
+  ) : (
+    <>
+      {/* Error state */}
+      {error && (
+        <p className="text-sm text-red-500 mb-3">
+          {error}
+        </p>
+      )}
 
-          {/* Available Coupons */}
-          <div className="space-y-3">
-            <h3 className="font-medium text-gray-900">Available Coupons</h3>
+      {/* Available Coupons */}
+      <div className="space-y-3">
+        <h3 className="font-medium text-gray-900">Available Coupons</h3>
 
-            {!loading && availableCoupons.length === 0 && !error && (
-              <p className="text-sm text-gray-500">
-                No offers available for this store right now.
-              </p>
-            )}
+        {!loading && availableCoupons.length === 0 && !error && (
+          <p className="text-sm text-gray-500">
+            No offers available for this store right now.
+          </p>
+        )}
 
-            {availableCoupons.map(coupon => {
-              const eligible = isEligible(coupon)
-              const discount = calculateDiscount(coupon)
-              const isApplied = appliedCoupon?.code === coupon.code
+        {availableCoupons.map(coupon => {
+          const eligible = isEligible(coupon)
+          const discount = calculateDiscount(coupon)
+          const isApplied = appliedCoupon?.code === coupon.code
 
-              return (
-                <div
-                  key={coupon.code}
-                  className={`border rounded-lg p-4 ${
-                    eligible
-                      ? "border-green-200 bg-green-50"
-                      : "border-gray-200 bg-gray-50"
-                  } ${isApplied ? "border-green-500 bg-green-100" : ""}`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Tag className="w-4 h-4 text-green-600" />
-                        <span className="font-semibold text-gray-900">
-                          {coupon.code}
-                        </span>
+          return (
+            <div
+              key={coupon.code}
+              className={`border rounded-lg p-4 ${
+                eligible
+                  ? "border-green-200 bg-green-50"
+                  : "border-gray-200 bg-gray-50"
+              } ${isApplied ? "border-green-500 bg-green-100" : ""}`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Tag className="w-4 h-4 text-green-600" />
+                    <span className="font-semibold text-gray-900">
+                      {coupon.code}
+                    </span>
 
-                        {coupon.displayValue && (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                            {coupon.displayValue}
-                          </span>
-                        )}
+                    {coupon.displayValue && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                        {coupon.displayValue}
+                      </span>
+                    )}
 
-                        {isApplied && (
-                          <Check className="w-4 h-4 text-green-600" />
-                        )}
-                      </div>
-
-                      <h4 className="font-medium text-gray-900 mb-1">
-                        {coupon.title}
-                      </h4>
-
-                      {coupon.description && (
-                        <p className="text-sm text-gray-600 mb-1">
-                          {coupon.description}
-                        </p>
-                      )}
-
-                      {/* Hide "Min order: $0.00" when minOrder is zero */}
-                      {coupon.minOrder > 0 && (
-                        <p className="text-xs text-gray-500 mb-2">
-                          Min order: {formatPriceAUD(coupon.minOrder)}
-                        </p>
-                      )}
-
-                      {eligible && (
-                        <p className="text-sm font-medium text-green-600">
-                          You&apos;ll save{" "}
-                          {formatPriceAUD(Math.round(discount))}
-                        </p>
-                      )}
-
-                      {/* Only show "add more" text if there IS a minOrder */}
-                      {!eligible && coupon.minOrder > 0 && (
-                        <p className="text-sm text-red-500">
-                          Add{" "}
-                          {formatPriceAUD(
-                            coupon.minOrder - currentTotal
-                          )}{" "}
-                          more to apply this coupon
-                        </p>
-                      )}
-                    </div>
-
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        if (eligible) {
-                          onApplyCoupon(coupon)
-                          onClose()
-                        }
-                      }}
-                      disabled={!eligible || isApplied}
-                      className={`${
-                        eligible && !isApplied
-                          ? "bg-green-600 hover:bg-green-700 text-white"
-                          : "bg-gray-200 text-gray-500"
-                      }`}
-                    >
-                      {isApplied ? "Applied" : "Apply"}
-                    </Button>
+                    {isApplied && (
+                      <Check className="w-4 h-4 text-green-600" />
+                    )}
                   </div>
-                </div>
-              )
-            })}
-          </div>
 
-          {/* Terms */}
-          <div className="mt-6 p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-600">
-              • Coupons are applicable on the total order value
-              <br />• Only one coupon can be applied per order
-              <br />• Coupons cannot be combined with other offers
-            </p>
-          </div>
-        </div>
+                  <h4 className="font-medium text-gray-900 mb-1">
+                    {coupon.title}
+                  </h4>
+
+                  {coupon.description && (
+                    <p className="text-sm text-gray-600 mb-1">
+                      {coupon.description}
+                    </p>
+                  )}
+
+                  {coupon.minOrder > 0 && (
+                    <p className="text-xs text-gray-500 mb-2">
+                      Min order: {formatPriceAUD(coupon.minOrder)}
+                    </p>
+                  )}
+
+                  {eligible && (
+                    <p className="text-sm font-medium text-green-600">
+                      You&apos;ll save{" "}
+                      {formatPriceAUD(Math.round(discount))}
+                    </p>
+                  )}
+
+                  {!eligible && coupon.minOrder > 0 && (
+                    <p className="text-sm text-red-500">
+                      Add{" "}
+                      {formatPriceAUD(
+                        coupon.minOrder - currentTotal
+                      )}{" "}
+                      more to apply this coupon
+                    </p>
+                  )}
+                </div>
+
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (eligible) {
+                      onApplyCoupon(coupon)
+                      onClose()
+                    }
+                  }}
+                  disabled={!eligible || isApplied}
+                  className={`${
+                    eligible && !isApplied
+                      ? "bg-green-600 hover:bg-green-700 text-white"
+                      : "bg-gray-200 text-gray-500"
+                  }`}
+                >
+                  {isApplied ? "Applied" : "Apply"}
+                </Button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Terms */}
+      <div className="mt-6 p-3 bg-gray-50 rounded-lg">
+        <p className="text-xs text-gray-600">
+          • Coupons are applicable on the total order value
+          <br />• Only one coupon can be applied per order
+          <br />• Coupons cannot be combined with other offers
+        </p>
+      </div>
+    </>
+  )}
+</div>
+
       </div>
     </div>
   )
