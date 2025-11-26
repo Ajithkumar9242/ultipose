@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { X, Plus, Minus, Star, Clock, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "react-hot-toast"
@@ -10,6 +10,17 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
   const [selectedVariant, setSelectedVariant] = useState(item?.variants?.[0])
   const [selectedAddOns, setSelectedAddOns] = useState([])
   const [specialInstructions, setSpecialInstructions] = useState("")
+
+
+    useEffect(() => {
+    if (isOpen && item) {
+      setQuantity(1)
+      setSelectedVariant(item.variants?.[0] || null)
+      setSelectedAddOns([])
+      setSpecialInstructions("")
+    }
+  }, [isOpen, item])
+
 
   if (!isOpen || !item) return null
 

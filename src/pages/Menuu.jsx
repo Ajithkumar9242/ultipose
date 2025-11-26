@@ -256,6 +256,23 @@ export default function Menuu() {
     setSelectedItem(item)
   }
 
+  // 🔥 Smart ADD button handler
+  const handleAddButtonClick = item => {
+    const hasVariants = item.variants && item.variants.length > 0
+    const hasAddOns = item.addOns && item.addOns.length > 0
+
+    // If there is ANY customization → open modal
+    if (hasVariants || hasAddOns || item.customizable) {
+      setSelectedItem(item)
+      return
+    }
+
+    // Simple item → directly add to cart with qty 1
+    handleAddToCart(item, 1, null, [], "")
+    toast.success(`${item.name} added to cart`)
+  }
+
+
   const handleCheckout = () => {
     dispatch(setIsOpen(false))
 
@@ -469,14 +486,15 @@ export default function Menuu() {
                       {/* Floating Add Button */}
                       <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 w-28 z-10">
                         <Button
-                          className="w-full bg-white text-orange-600 hover:text-white hover:bg-orange-500 border border-orange-100 shadow-lg shadow-orange-500/10 hover:shadow-orange-500/30 font-bold text-sm h-10 rounded-xl uppercase tracking-wider transition-all duration-300 ease-out active:scale-95"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleItemClick(item);
-                          }}
-                        >
-                          ADD <Plus className="w-4 h-4 ml-1 stroke-[3px]" />
-                        </Button>
+  className="w-full bg-white text-orange-600 hover:text-white hover:bg-orange-500 border border-orange-100 shadow-lg shadow-orange-500/10 hover:shadow-orange-500/30 font-bold text-sm h-10 rounded-xl uppercase tracking-wider transition-all duration-300 ease-out active:scale-95"
+  onClick={e => {
+    e.stopPropagation()
+    handleAddButtonClick(item)   // 👈 NEW
+  }}
+>
+  ADD <Plus className="w-4 h-4 ml-1 stroke-[3px]" />
+</Button>
+
                       </div>
                     </div>
                   </div>
