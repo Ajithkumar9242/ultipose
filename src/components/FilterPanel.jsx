@@ -147,36 +147,54 @@ export function FilterPanel({ filters, onFiltersChange, categories }) {
           </div>
 
           {/* Price Range */}
-          <div className="space-y-3">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Price Range</label>
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1 group">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold group-focus-within:text-orange-500 transition-colors">$</span>
-                <Input
-                    type="number"
-                    placeholder="Min"
-                    value={filters.priceRange[0]}
-                    onChange={e =>
-                        handleFilterChange("priceRange", [Number(e.target.value), filters.priceRange[1]])
-                    }
-                    className="pl-8 bg-gray-50 border-transparent focus:bg-white focus:border-orange-500 rounded-xl h-11"
-                />
-              </div>
-              <div className="w-4 h-[2px] bg-gray-200 rounded-full" />
-              <div className="relative flex-1 group">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold group-focus-within:text-orange-500 transition-colors">$</span>
-                <Input
-                    type="number"
-                    placeholder="Max"
-                    value={filters.priceRange[1]}
-                    onChange={e =>
-                        handleFilterChange("priceRange", [filters.priceRange[0], Number(e.target.value)])
-                    }
-                    className="pl-8 bg-gray-50 border-transparent focus:bg-white focus:border-orange-500 rounded-xl h-11"
-                />
-              </div>
-            </div>
-          </div>
+          
+<div className="space-y-3">
+  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+    Price Range
+  </label>
+  <div className="flex items-center gap-3">
+    {/* Min */}
+    <div className="relative flex-1 group">
+      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold group-focus-within:text-orange-500 transition-colors">
+        $
+      </span>
+      <Input
+        type="number"
+        placeholder="Min"
+        value={filters.priceRange[0] == null ? "" : filters.priceRange[0]}
+        onChange={e => {
+          const raw = e.target.value
+          const min =
+            raw === "" ? null : Number(raw) // empty -> null
+          handleFilterChange("priceRange", [min, filters.priceRange[1]])
+        }}
+        className="pl-8 bg-gray-50 border-transparent focus:bg-white focus:border-orange-500 rounded-xl h-11"
+      />
+    </div>
+
+    <div className="w-4 h-[2px] bg-gray-200 rounded-full" />
+
+    {/* Max */}
+    <div className="relative flex-1 group">
+      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold group-focus-within:text-orange-500 transition-colors">
+        $
+      </span>
+      <Input
+        type="number"
+        placeholder="Max"
+        value={filters.priceRange[1] == null ? "" : filters.priceRange[1]}
+        onChange={e => {
+          const raw = e.target.value
+          const max =
+            raw === "" ? null : Number(raw) // empty -> null
+          handleFilterChange("priceRange", [filters.priceRange[0], max])
+        }}
+        className="pl-8 bg-gray-50 border-transparent focus:bg-white focus:border-orange-500 rounded-xl h-11"
+      />
+    </div>
+  </div>
+</div>
+
 
           {/* Rating */}
           <div className="space-y-3">
