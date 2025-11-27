@@ -315,64 +315,187 @@ export default function OrderStatusPage() {
 
   const storeCode = order.storeCode
 
-  const handleDownloadInvoice = () => {
-    if (!invoiceRef.current) return
+const handlePreviewInvoice = () => {
+    // 1. Prepare Data
+    const items = order.items || [];
+    const dateStr = new Date(order.createdAt || Date.now()).toLocaleString();
+    
+    // Financials
+    const subtotal = order.subtotal || 0;
+    const tax = order.tax || 0;
+    const delivery = order.deliveryFee || 0;
+    const discount = order.payment?.events?.[0]?.payload?.evalResult?.totalDiscountCents || 0;
+    const totalPaid = order.payment?.amount ?? (subtotal + tax + delivery - discount);
 
-    const printContents = invoiceRef.current.innerHTML
-    const popup = window.open("", "_blank", "width=900,height=700")
-    if (!popup) return
+    // 2. Generate Items HTML
+    const itemsHtml = items.map(item => `
+      <div class="item-row">
+        <div class="qty">${item.quantity}x</div>
+        <div class="name">${item.name}</div>
+        <div class="price">${formatPriceAUD((item.price || 0) * (item.quantity || 1))}</div>
+      </div>
+    `).join('');
 
+    // 3. Open the Popup (No content yet)
+    const popup = window.open("", "ReceiptPreview", "width=420,height=700,scrollbars=yes");
+    if (!popup) return;
+
+    // 4. Write the Content (With a Preview UI and Print Button)
     popup.document.write(`
+      <!DOCTYPE html>
       <html>
         <head>
-          <title>Invoice #${orderId}</title>
+          <title>Receipt Preview</title>
           <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            * { box-sizing: border-box; }
+            @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@500;600&display=swap');
+            
+            /* --- PREVIEW WINDOW STYLING (Screen Only) --- */
             body {
-              font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-              padding: 24px;
-              color: #111827;
-              background: #ffffff;
+              margin: 0;
+              padding: 0;
+              background: #e5e7eb; /* Darker grey background for contrast */
+              font-family: 'Inter', sans-serif;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              min-height: 100vh;
+              padding-bottom: 80px; /* Space for fixed button */
             }
-            h1,h2,h3,h4 { margin: 0 0 8px; }
-            .section {
-              border: 1px solid #e5e7eb;
-              border-radius: 12px;
-              padding: 16px 18px;
-              margin-bottom: 16px;
-            }
-            .title {
-              font-size: 16px;
-              font-weight: 600;
-              margin-bottom: 8px;
-            }
-            table {
+
+            /* The actual receipt paper look */
+            .ticket {
+              background: white;
               width: 100%;
-              border-collapse: collapse;
-              margin-top: 8px;
+              max-width: 340px; /* Realistic width */
+              padding: 24px;
+              margin-top: 24px;
+              margin-bottom: 24px;
+              box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+              font-family: 'Space Mono', monospace; /* The "Receipt" Font */
+              color: #111;
+              position: relative;
             }
-            th, td {
-              border-bottom: 1px solid #e5e7eb;
-              padding: 8px 4px;
-              text-align: left;
-              font-size: 13px;
+
+            /* jagged edge effect (optional visual flair) */
+            .ticket::after {
+              content: "";
+              position: absolute;
+              bottom: -6px;
+              left: 0;
+              width: 100%;
+              height: 6px;
+              background: radial-gradient(circle, transparent 70%, white 70%) 0 0;
+              background-size: 12px 12px;
+              background-repeat: repeat-x;
             }
-            th {
-              background: #f9fafb;
+
+            /* --- RECEIPT CONTENT STYLING --- */
+            h1 { font-size: 20px; font-weight: 700; text-align: center; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: -0.5px; }
+            .meta { text-align: center; font-size: 11px; color: #666; margin-bottom: 20px; line-height: 1.4; }
+            .divider { border-top: 2px dashed #000; margin: 16px 0; opacity: 0.3; }
+            
+            .item-row { display: flex; align-items: flex-start; font-size: 12px; margin-bottom: 10px; line-height: 1.4; }
+            .qty { width: 24px; font-weight: 700; flex-shrink: 0; }
+            .name { flex: 1; padding-right: 8px; }
+            .price { text-align: right; white-space: nowrap; font-weight: 700; }
+
+            .totals-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; color: #444; }
+            .totals-row.final { font-size: 15px; font-weight: 700; color: #000; margin-top: 12px; padding-top: 12px; border-top: 2px solid #000; }
+            
+            .footer { text-align: center; font-size: 11px; margin-top: 24px; color: #888; }
+
+            /* --- ACTION BAR (Floating Buttons) --- */
+            .action-bar {
+              position: fixed;
+              bottom: 20px;
+              left: 50%;
+              transform: translateX(-50%);
+              display: flex;
+              gap: 12px;
+              z-index: 100;
+              background: white;
+              padding: 8px;
+              border-radius: 50px;
+              box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+              border: 1px solid #eee;
+            }
+            
+            .btn {
+              padding: 10px 24px;
+              border-radius: 40px;
+              font-size: 14px;
               font-weight: 600;
+              cursor: pointer;
+              border: none;
+              transition: all 0.2s;
             }
-            .text-right { text-align: right; }
+            
+            .btn-print { background: #000; color: white; }
+            .btn-print:hover { background: #333; transform: translateY(-1px); }
+            
+            .btn-close { background: #f3f4f6; color: #374151; }
+            .btn-close:hover { background: #e5e7eb; }
+
+            /* --- PRINT MODE (Hides the UI, shows only receipt) --- */
+            @media print {
+              body { background: white; padding: 0; min-height: auto; display: block; }
+              .ticket { box-shadow: none; margin: 0; width: 100%; max-width: 100%; padding: 0; }
+              .action-bar, .no-print { display: none !important; }
+              .ticket::after { display: none; } /* Remove jagged edge for print */
+            }
           </style>
         </head>
         <body>
-          ${printContents}
+          
+          <div class="ticket">
+            <h1>${storeName}</h1>
+            <div class="meta">
+              <div>ORDER #${orderId.slice(-6).toUpperCase()}</div>
+              <div>${dateStr}</div>
+              <div>${customer.name ? customer.name.split(' ')[0] : 'Guest'}</div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="items">
+              ${itemsHtml}
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="totals">
+              <div class="totals-row">
+                <span>Subtotal</span>
+                <span>${formatPriceAUD(subtotal)}</span>
+              </div>
+              
+              ${tax > 0 ? `<div class="totals-row"><span>Tax</span><span>${formatPriceAUD(tax)}</span></div>` : ''}
+              ${delivery > 0 ? `<div class="totals-row"><span>Delivery</span><span>${formatPriceAUD(delivery)}</span></div>` : ''}
+              ${discount > 0 ? `<div class="totals-row"><span>Discount</span><span>-${formatPriceAUD(discount)}</span></div>` : ''}
+
+              <div class="totals-row final">
+                <span>TOTAL</span>
+                <span>${formatPriceAUD(totalPaid)}</span>
+              </div>
+            </div>
+
+            <div class="footer">
+              <p>Thank you for your order!</p>
+            </div>
+          </div>
+
+          <div class="action-bar">
+            <button class="btn btn-close" onclick="window.close()">Close</button>
+            <button class="btn btn-print" onclick="window.print()">Print Receipt</button>
+          </div>
+
         </body>
       </html>
-    `)
-    popup.document.close()
-    popup.focus()
-    popup.print()
+    `);
+
+    popup.document.close();
   }
 
   return (
@@ -765,7 +888,7 @@ export default function OrderStatusPage() {
           </Button>
           <Button
             className="flex-1 sm:flex-none bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center gap-2 shadow-sm shadow-orange-200 hover:shadow-md transition-all duration-200 active:scale-95"
-            onClick={handleDownloadInvoice}
+            onClick={handlePreviewInvoice}
           >
             <FileDown className="w-4 h-4" />
             Download invoice (PDF)
