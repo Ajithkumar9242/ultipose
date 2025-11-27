@@ -1,6 +1,6 @@
 // src/pages/Menuu.jsx
 "use client"
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { toast } from "react-hot-toast"
@@ -46,6 +46,8 @@ export default function Menuu() {
 
   const [selectedCategory, setSelectedCategory] = useState("Menu")
   const [orderConfirmation, setOrderConfirmation] = useState(null)
+
+  const listRef = useRef(null)
 
   const [filters, setFilters] = useState({
     category: "",
@@ -199,6 +201,8 @@ export default function Menuu() {
     fetchMenu()
   }, [POS_API_URL, effectiveStoreCode])
 
+
+
   const getCartItemsCount = () =>
     cartItems.reduce((total, item) => total + (item.quantity || 1), 0)
 
@@ -233,6 +237,22 @@ export default function Menuu() {
       return true
     })
   }, [foodItems, vegOnly, filters, selectedCategory])
+
+      useEffect(() => {
+  if (!listRef.current) return
+  if (typeof window === "undefined") return
+
+  // Only care about mobile if you want:
+  // if (window.innerWidth >= 1024) return
+
+  const rect = listRef.current.getBoundingClientRect()
+  const y = rect.top + window.scrollY - 90 // adjust for top bar height
+
+  window.scrollTo({
+    top: y < 0 ? 0 : y,
+    behavior: "smooth"
+  })
+}, [selectedCategory])
 
   const handleAddToCart = (
     item,
@@ -327,6 +347,9 @@ export default function Menuu() {
     return <NotFound />
   }
 
+
+
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50/50">
       
@@ -393,6 +416,8 @@ export default function Menuu() {
         />
 
         <main className="flex-1 px-4 lg:px-8">
+          <div ref={listRef}>
+
           {/* Header Section */}
           <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between border-b border-orange-100 pb-4 gap-2">
             <div>
@@ -540,7 +565,10 @@ export default function Menuu() {
               </div>
             )}
           </>
+          </div>
+
         </main>
+
       </div>
 
       <ItemDetailsModal
