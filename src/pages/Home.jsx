@@ -415,7 +415,7 @@ const Home = () => {
               U
             </div>
             <span className="font-bold text-xl hidden sm:block tracking-tight">
-              Ultipose
+              Ultipos
             </span>
           </div>
 
@@ -468,14 +468,7 @@ const Home = () => {
               Order from your favorite local restaurants.
             </p>
           </div>
-          <div className="mt-2 sm:mt-0 bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20">
-            <p className="font-bold flex items-center gap-2 text-sm sm:text-base">
-              <Clock size={18} />{" "}
-              {serviceType === "delivery"
-                ? "25-35 min delivery"
-                : "Ready in 15 mins"}
-            </p>
-          </div>
+          
         </div>
       </div>
 
@@ -572,9 +565,7 @@ const RestaurantCard = ({ data, onClick }) => (
           </span>
         </div>
       )}
-      <div className="absolute bottom-3 right-3 bg-white px-2 py-1 rounded-lg shadow text-xs font-bold flex items-center gap-1">
-        <Clock size={12} className="text-gray-500" /> {data.time}
-      </div>
+     
     </div>
 
     <div className="p-4">
