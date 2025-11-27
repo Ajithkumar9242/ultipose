@@ -216,27 +216,33 @@ export default function Menuu() {
       return total + (basePrice + addOnsPrice) * (item.quantity || 1)
     }, 0)
 
-  const filteredItems = useMemo(() => {
-    return foodItems.filter(item => {
-      if (vegOnly && !item.isVeg) return false
-      if (filters.category && item.category !== filters.category) return false
-      if (selectedCategory !== "Menu" && item.category !== selectedCategory)
-        return false
-      if (filters.isVeg !== null && item.isVeg !== filters.isVeg) return false
-      if (
-        item.price < filters.priceRange[0] ||
-        item.price > filters.priceRange[1]
-      )
-        return false
-      if (item.rating < filters.rating) return false
-      if (
-        filters.searchQuery &&
-        !item.name.toLowerCase().includes(filters.searchQuery.toLowerCase())
-      )
-        return false
-      return true
-    })
-  }, [foodItems, vegOnly, filters, selectedCategory])
+ const filteredItems = useMemo(() => {
+  // handle null / empty bounds
+  const [rawMin, rawMax] = filters.priceRange || []
+  const effectiveMin =
+    rawMin == null || Number.isNaN(rawMin) ? 0 : rawMin
+  const effectiveMax =
+    rawMax == null || Number.isNaN(rawMax) ? 100000 : rawMax
+
+  return foodItems.filter(item => {
+    if (vegOnly && !item.isVeg) return false
+    if (filters.category && item.category !== filters.category) return false
+    if (selectedCategory !== "Menu" && item.category !== selectedCategory)
+      return false
+    if (filters.isVeg !== null && item.isVeg !== filters.isVeg) return false
+
+    if (item.price < effectiveMin || item.price > effectiveMax) return false
+
+    if (item.rating < filters.rating) return false
+    if (
+      filters.searchQuery &&
+      !item.name.toLowerCase().includes(filters.searchQuery.toLowerCase())
+    )
+      return false
+    return true
+  })
+}, [foodItems, vegOnly, filters, selectedCategory])
+
 
       useEffect(() => {
   if (!listRef.current) return

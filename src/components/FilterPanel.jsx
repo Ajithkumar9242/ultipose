@@ -31,15 +31,16 @@ export function FilterPanel({ filters, onFiltersChange, categories }) {
     onFiltersChange({ ...filters, [key]: value })
   }
 
-  const handleReset = () => {
-    onFiltersChange({
-      category: "",
-      isVeg: null,
-      priceRange: [0, 100000],
-      rating: 0,
-      searchQuery: ""
-    })
-  }
+const handleReset = () => {
+  onFiltersChange({
+    category: "",
+    isVeg: null,
+    priceRange: [null, null], // no min/max after reset
+    rating: 0,
+    searchQuery: ""
+  })
+}
+
 
   // Define the Modal Content
   const filterModalContent = (
@@ -148,6 +149,7 @@ export function FilterPanel({ filters, onFiltersChange, categories }) {
 
           {/* Price Range */}
           
+{/* Price Range */}
 <div className="space-y-3">
   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
     Price Range
@@ -160,13 +162,22 @@ export function FilterPanel({ filters, onFiltersChange, categories }) {
       </span>
       <Input
         type="number"
+        min={0}
         placeholder="Min"
         value={filters.priceRange[0] == null ? "" : filters.priceRange[0]}
         onChange={e => {
           const raw = e.target.value
-          const min =
-            raw === "" ? null : Number(raw) // empty -> null
-          handleFilterChange("priceRange", [min, filters.priceRange[1]])
+
+          if (raw === "") {
+            // empty -> no lower bound
+            handleFilterChange("priceRange", [null, filters.priceRange[1]])
+            return
+          }
+
+          // clamp to 0, no negatives
+          const num = Math.max(0, Number(raw) || 0)
+
+          handleFilterChange("priceRange", [num, filters.priceRange[1]])
         }}
         className="pl-8 bg-gray-50 border-transparent focus:bg-white focus:border-orange-500 rounded-xl h-11"
       />
@@ -181,19 +192,29 @@ export function FilterPanel({ filters, onFiltersChange, categories }) {
       </span>
       <Input
         type="number"
+        min={0}
         placeholder="Max"
         value={filters.priceRange[1] == null ? "" : filters.priceRange[1]}
         onChange={e => {
           const raw = e.target.value
-          const max =
-            raw === "" ? null : Number(raw) // empty -> null
-          handleFilterChange("priceRange", [filters.priceRange[0], max])
+
+          if (raw === "") {
+            // empty -> no upper bound
+            handleFilterChange("priceRange", [filters.priceRange[0], null])
+            return
+          }
+
+          // clamp to 0, no negatives
+          const num = Math.max(0, Number(raw) || 0)
+
+          handleFilterChange("priceRange", [filters.priceRange[0], num])
         }}
         className="pl-8 bg-gray-50 border-transparent focus:bg-white focus:border-orange-500 rounded-xl h-11"
       />
     </div>
   </div>
 </div>
+
 
 
           {/* Rating */}
