@@ -1,14 +1,13 @@
 import { toast } from "react-hot-toast"
 // src/api.js
 import axios from "axios"
+const API_BASE =
+  import.meta.env.VITE_API_URL || "http://ultipos.local:8000"
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://devapi.ulti-pos.com/ultipos-online"   // e.g. "https://devapi.ulti-pos.com/ultipos-online"
-
-// This is the main axios instance you'll use everywhere
 const api = axios.create({
-  baseURL: API_BASE,      // now you can call api.get("/something")
-  // withCredentials: true // uncomment if your backend uses cookies
+  baseURL: API_BASE
 })
+
 
 // ✅ OPTIONAL: add a request interceptor (for auth token etc.)
 api.interceptors.request.use(

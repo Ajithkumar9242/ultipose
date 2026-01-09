@@ -13,7 +13,7 @@ export default defineConfig({
     proxy: {
       // any request starting with /pos-api will be proxied
       "/pos-api": {
-        target: "https://devapi.ulti-pos.com/ultipos-online",
+        target: "http://ultipos.local:8000",
         changeOrigin: true,
         secure: false
       }

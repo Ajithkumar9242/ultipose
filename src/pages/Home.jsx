@@ -12,7 +12,10 @@ import {
   ShoppingBag,
   X
 } from "lucide-react"
-import restaurantData from "../data/restaurant.js"
+// import restaurantData from "../data/restaurant.js"
+const OUTLET_CODE = "ultipos-main"
+import api from "@/api"
+
 
 // --- UI COMPONENTS ---
 const Button = ({
@@ -60,6 +63,10 @@ const Home = () => {
   const [serviceType, setServiceType] = useState("delivery")
   const [manualFormVisible, setManualFormVisible] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  const [store, setStore] = useState(null)
+const [loadingStore, setLoadingStore] = useState(true)
+
 
   const [manualAddress, setManualAddress] = useState({
     name: "",
@@ -155,6 +162,23 @@ const Home = () => {
       }
     )
   }
+useEffect(() => {
+  fetch(
+    "http://ultipos.local:8000/api/method/ultipos.api.store.get_store?outlet_code=ultipos-main"
+  )
+    .then(r => r.json())
+    .then(data => {
+      setStore(data.message)   // 🔥 THIS WAS MISSING
+      setLoadingStore(false)
+    })
+    .catch(err => {
+      console.error(err)
+      setLoadingStore(false)
+    })
+}, [])
+
+
+
 
   // Manual address submit → geocode → set preview
   const handleManualSubmit = async e => {
@@ -475,25 +499,29 @@ const Home = () => {
       {/* RESTAURANT GRID – ONLY AFTER LOCATION IS SET */}
       {hasLocation ? (
         <main className="max-w-6xl mx-auto px-4 py-8">
-          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-            Available Restaurants
-            <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-              {restaurantData.length} nearby
-            </span>
-          </h2>
+         <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+  Available Restaurants
+  <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+    {store ? 1 : 0} nearby
+  </span>
+</h2>
+
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {restaurantData.map(rest => (
+{store && (
   <RestaurantCard
-    key={rest.id}
-    data={rest}
-    onClick={() =>
-      rest.storeCode
-        ? navigate(`/s/${rest.storeCode}`)     // 👈 ultipos-test-store-1 / 2
-        :   navigate("/notfound")    // 👈 fallback for dummy stores
-    }
+    data={{
+      name: store.restaurant.name,
+      image: store.restaurant.logo || "/placeholder.svg",
+      rating: 4.5,
+      deliveryFee: "Free",
+      categories: ["Fast Food"],
+      isOpen: store.outlet.is_open
+    }}
+    onClick={() => navigate(`/s/${store.outlet.outlet_code}`)}
   />
-))}
+)}
+
 
           </div>
         </main>

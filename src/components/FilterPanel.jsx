@@ -6,24 +6,22 @@ import { X, ChevronDown, SlidersHorizontal, RotateCcw, Search } from "lucide-rea
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-export function FilterPanel({ filters, onFiltersChange, categories }) {
+export function FilterPanel({ filters, onFiltersChange, categories = [] }) {
   const [isOpen, setIsOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
 
-  // 1. Handle mounting to ensure document.body exists (fixes SSR issues)
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // 2. Lock body scroll when filter is open so background doesn't move
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden'
+      document.body.style.overflow = "hidden"
     } else {
-      document.body.style.overflow = 'unset'
+      document.body.style.overflow = "unset"
     }
     return () => {
-      document.body.style.overflow = 'unset'
+      document.body.style.overflow = "unset"
     }
   }, [isOpen])
 
@@ -31,29 +29,25 @@ export function FilterPanel({ filters, onFiltersChange, categories }) {
     onFiltersChange({ ...filters, [key]: value })
   }
 
-const handleReset = () => {
-  onFiltersChange({
-    category: "",
-    isVeg: null,
-    priceRange: [null, null], // no min/max after reset
-    rating: 0,
-    searchQuery: ""
-  })
-}
+  const handleReset = () => {
+    onFiltersChange({
+      category: "",
+      isVeg: null,
+      priceRange: [null, null],
+      rating: 0,
+      searchQuery: ""
+    })
+  }
 
-
-  // Define the Modal Content
   const filterModalContent = (
     <div className="fixed inset-0 z-[100] flex justify-end isolate font-sans">
-      {/* Dark Backdrop with Blur */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
         onClick={() => setIsOpen(false)}
       />
 
-      {/* Sidebar Panel */}
       <div className="relative h-full w-full sm:w-[400px] bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300 ease-out border-l border-white/20">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-white z-10">
           <div>
@@ -61,7 +55,7 @@ const handleReset = () => {
             <p className="text-xs text-gray-500 font-medium mt-0.5">Refine your search results</p>
           </div>
           <div className="flex items-center gap-3">
-            <button 
+            <button
               onClick={handleReset}
               className="flex items-center gap-1 text-xs font-bold text-orange-600 hover:bg-orange-50 px-3 py-1.5 rounded-full transition-colors"
             >
@@ -79,9 +73,9 @@ const handleReset = () => {
           </div>
         </div>
 
-        {/* Scrollable Content */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide bg-white">
-          
+
           {/* Search */}
           <div className="space-y-3">
             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Search</label>
@@ -96,34 +90,33 @@ const handleReset = () => {
             </div>
           </div>
 
-          {/* Food Type (Segmented Control) */}
+          {/* Food Type */}
           <div className="space-y-3">
             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Preference</label>
             <div className="grid grid-cols-3 bg-gray-100 p-1.5 rounded-xl gap-1">
-                {[
-                    { label: 'All', value: null },
-                    { label: 'Veg', value: true },
-                    { label: 'Non-Veg', value: false }
-                ].map((opt) => {
-                    const isActive = filters.isVeg === opt.value
-                    return (
-                        <button
-                            key={String(opt.label)}
-                            onClick={() => handleFilterChange("isVeg", opt.value)}
-                            className={`
-                                py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2
-                                ${isActive 
-                                    ? 'bg-white text-gray-900 shadow-sm ring-1 ring-black/5' 
-                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
-                                }
-                            `}
-                        >
-                            {opt.value === true && <div className="w-2 h-2 rounded-full bg-green-500" />}
-                            {opt.value === false && <div className="w-2 h-2 rounded-full bg-red-500" />}
-                            {opt.label}
-                        </button>
-                    )
-                })}
+              {[
+                { label: "All", value: null },
+                { label: "Veg", value: true },
+                { label: "Non-Veg", value: false }
+              ].map(opt => {
+                const isActive = filters.isVeg === opt.value
+                return (
+                  <button
+                    key={String(opt.label)}
+                    onClick={() => handleFilterChange("isVeg", opt.value)}
+                    className={`
+                      py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2
+                      ${isActive
+                        ? "bg-white text-gray-900 shadow-sm ring-1 ring-black/5"
+                        : "text-gray-500 hover:text-gray-700 hover:bg-gray-200/50"}
+                    `}
+                  >
+                    {opt.value === true && <div className="w-2 h-2 rounded-full bg-green-500" />}
+                    {opt.value === false && <div className="w-2 h-2 rounded-full bg-red-500" />}
+                    {opt.label}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -131,109 +124,25 @@ const handleReset = () => {
           <div className="space-y-3">
             <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Category</label>
             <div className="relative group">
-                <select
-                  value={filters.category}
-                  onChange={e => handleFilterChange("category", e.target.value)}
-                  className="w-full appearance-none bg-gray-50 hover:bg-gray-100 border border-transparent focus:border-orange-500 text-gray-800 font-semibold py-3.5 px-4 pr-10 rounded-xl outline-none transition-colors cursor-pointer"
-                >
-                  <option value="">All Categories</option>
-                  {categories.map(category => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-hover:text-orange-500 transition-colors pointer-events-none" />
+              <select
+                value={filters.category}
+                onChange={e => handleFilterChange("category", e.target.value)}
+                className="w-full appearance-none bg-gray-50 hover:bg-gray-100 border border-transparent focus:border-orange-500 text-gray-800 font-semibold py-3.5 px-4 pr-10 rounded-xl outline-none transition-colors cursor-pointer"
+              >
+                <option value="">All Categories</option>
+
+                {/* ✅ Safe */}
+                {(categories || []).map(category => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-hover:text-orange-500 transition-colors pointer-events-none" />
             </div>
           </div>
 
-          {/* Price Range */}
-          
-{/* Price Range */}
-<div className="space-y-3">
-  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-    Price Range
-  </label>
-  <div className="flex items-center gap-3">
-    {/* Min */}
-    <div className="relative flex-1 group">
-      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold group-focus-within:text-orange-500 transition-colors">
-        $
-      </span>
-      <Input
-        type="number"
-        min={0}
-        placeholder="Min"
-        value={filters.priceRange[0] == null ? "" : filters.priceRange[0]}
-        onChange={e => {
-          const raw = e.target.value
-
-          if (raw === "") {
-            // empty -> no lower bound
-            handleFilterChange("priceRange", [null, filters.priceRange[1]])
-            return
-          }
-
-          // clamp to 0, no negatives
-          const num = Math.max(0, Number(raw) || 0)
-
-          handleFilterChange("priceRange", [num, filters.priceRange[1]])
-        }}
-        className="pl-8 bg-gray-50 border-transparent focus:bg-white focus:border-orange-500 rounded-xl h-11"
-      />
-    </div>
-
-    <div className="w-4 h-[2px] bg-gray-200 rounded-full" />
-
-    {/* Max */}
-    <div className="relative flex-1 group">
-      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold group-focus-within:text-orange-500 transition-colors">
-        $
-      </span>
-      <Input
-        type="number"
-        min={0}
-        placeholder="Max"
-        value={filters.priceRange[1] == null ? "" : filters.priceRange[1]}
-        onChange={e => {
-          const raw = e.target.value
-
-          if (raw === "") {
-            // empty -> no upper bound
-            handleFilterChange("priceRange", [filters.priceRange[0], null])
-            return
-          }
-
-          // clamp to 0, no negatives
-          const num = Math.max(0, Number(raw) || 0)
-
-          handleFilterChange("priceRange", [filters.priceRange[0], num])
-        }}
-        className="pl-8 bg-gray-50 border-transparent focus:bg-white focus:border-orange-500 rounded-xl h-11"
-      />
-    </div>
-  </div>
-</div>
-
-
-
-          {/* Rating */}
-          <div className="space-y-3">
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Minimum Rating</label>
-            <div className="relative group">
-                <select
-                  value={filters.rating}
-                  onChange={e => handleFilterChange("rating", Number(e.target.value))}
-                  className="w-full appearance-none bg-gray-50 hover:bg-gray-100 border border-transparent focus:border-orange-500 text-gray-800 font-semibold py-3.5 px-4 pr-10 rounded-xl outline-none transition-colors cursor-pointer"
-                >
-                  <option value={0}>Any Rating</option>
-                  <option value={3}>3.0+ Stars</option>
-                  <option value={4}>4.0+ Stars</option>
-                  <option value={4.5}>4.5+ Stars</option>
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-hover:text-orange-500 transition-colors pointer-events-none" />
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
@@ -251,7 +160,6 @@ const handleReset = () => {
 
   return (
     <>
-      {/* Trigger Button */}
       <Button
         variant="outline"
         onClick={() => setIsOpen(true)}
@@ -261,9 +169,6 @@ const handleReset = () => {
         <span className="hidden sm:inline">Filters</span>
       </Button>
 
-      {/* 3. Use createPortal to move the modal to document.body 
-        This prevents overlapping/compression inside the header 
-      */}
       {isOpen && mounted && createPortal(filterModalContent, document.body)}
     </>
   )
