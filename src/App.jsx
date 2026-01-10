@@ -10,6 +10,7 @@ import NotFound from "./pages/NotFound"
 // ⬇️ NEW imports
 import PaymentReturn from "./pages/PaymentReturn"
 import OrderStatusPage from "./pages/OrderStatus"
+import FakeWorldline from "./pages/FakeWorldline"
 
 function App() {
   return (
@@ -23,6 +24,8 @@ function App() {
         {/* ⬇️ NEW ROUTES */}
         <Route path="/payment-return" element={<PaymentReturn />} />
         <Route path="/order-status/:orderId" element={<OrderStatusPage />} />
+<Route path="/track/:orderId" element={<OrderStatusPage />} />
+
 
         {/* Redirect /store/:storeCode → /s/:storeCode */}
         <Route
@@ -37,7 +40,7 @@ function App() {
             />
           }
         />
-
+<Route path="/worldline-pay" element={<FakeWorldline />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/cart" element={<Cart />} />
         <Route path="*" element={<NotFound />} />

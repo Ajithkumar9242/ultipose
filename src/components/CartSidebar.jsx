@@ -74,7 +74,7 @@ export function CartSidebar({
 
                 return (
                   <div 
-                    key={item.id} 
+                    key={item.cartKey} 
                     className="group relative flex gap-4 animate-in slide-in-from-bottom-2 duration-500"
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
@@ -97,24 +97,37 @@ export function CartSidebar({
                       </div>
 
                       {/* Variants & Addons */}
-                      <div className="pl-6 space-y-1 mb-3">
-                         {item.selectedVariant && (
-                            <div className="flex items-center gap-1 text-xs text-gray-500 bg-gray-50 w-fit px-2 py-0.5 rounded-md">
-                                <span className="font-medium">Size:</span> {item.selectedVariant.name}
-                            </div>
-                         )}
-                         {item.selectedAddOns.length > 0 && (
-                           <p className="text-xs text-gray-500 leading-relaxed">
-                             <span className="font-medium text-gray-600">Add-ons:</span>{" "}
-                             {item.selectedAddOns.map(addon => addon.name).join(", ")}
-                           </p>
-                         )}
-                         {item.specialInstructions && (
-                           <p className="text-xs text-orange-600 italic bg-orange-50/50 p-1.5 rounded mt-1 border border-orange-100">
-                             "{item.specialInstructions}"
-                           </p>
-                         )}
-                      </div>
+                      {/* Variants & Addons */}
+<div className="pl-6 space-y-1 mb-3">
+  {item.selectedVariant && (
+    <div className="flex items-center gap-1 text-xs text-gray-500 bg-gray-50 w-fit px-2 py-0.5 rounded-md">
+      <span className="font-medium">Size:</span> {item.selectedVariant.name}
+    </div>
+  )}
+
+  {(item.selectedAddOns || []).length > 0 && (
+    <p className="text-xs text-gray-500 leading-relaxed">
+      <span className="font-medium text-gray-600">Add-ons:</span>{" "}
+      {(item.selectedAddOns || []).map(addon => addon.name).join(", ")}
+    </p>
+  )}
+
+  {(item.selectedModifiers || []).length > 0 && (
+    <p className="text-xs text-gray-500 leading-relaxed">
+      <span className="font-medium text-gray-600">Custom:</span>{" "}
+      {(item.selectedModifiers || [])
+        .map(m => `${m.group}: ${m.name}`)
+        .join(", ")}
+    </p>
+  )}
+
+  {item.specialInstructions && (
+    <p className="text-xs text-orange-600 italic bg-orange-50/50 p-1.5 rounded mt-1 border border-orange-100">
+      "{item.specialInstructions}"
+    </p>
+  )}
+</div>
+
 
                       {/* Action Row */}
                       <div className="pl-6 flex items-center justify-between">
@@ -123,9 +136,9 @@ export function CartSidebar({
                           <button
                             onClick={() => {
                                 if (item.quantity <= 1) {
-                                  onRemoveItem(item.id)
+                                  onRemoveItem(item.cartKey)
                                 } else {
-                                  onUpdateQuantity(item.id, item.quantity - 1)
+                                  onUpdateQuantity(item.cartKey, item.quantity - 1)
                                 }
                               }}
                             className="w-7 h-7 flex items-center justify-center bg-white rounded-md shadow-sm text-gray-600 hover:text-orange-600 hover:bg-orange-50 transition-colors"
@@ -136,7 +149,7 @@ export function CartSidebar({
                           <span className="w-4 text-center text-sm font-semibold text-gray-900">{item.quantity}</span>
                           
                           <button
-                             onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
+                             onClick={() => onUpdateQuantity(item.cartKey, item.quantity + 1)}
                              className="w-7 h-7 flex items-center justify-center bg-white rounded-md shadow-sm text-gray-600 hover:text-green-600 hover:bg-green-50 transition-colors"
                           >
                             <Plus className="w-3.5 h-3.5" />

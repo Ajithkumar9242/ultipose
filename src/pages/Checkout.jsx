@@ -1,22 +1,20 @@
 // src/pages/Checkout.jsx
 "use client"
+
 import { useSelector } from "react-redux"
 import { useNavigate } from "react-router-dom"
 import { useState, useMemo } from "react"
 import { OrderPage } from "../components/OrderPage"
-import api from "../api/index"          // ⬅️ same style as company repo
+import api from "../api/index"
 import { toast } from "react-hot-toast"
 
 export default function Checkout() {
   const navigate = useNavigate()
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
 
-  // 🔹 Get currentStore + cart items + user FOR THAT STORE (same as before)
   const { cartItems, currentStore, savedUser } = useSelector(state => {
     const storeCode = state.cart.currentStore
-    const itemsForStore = storeCode
-      ? state.cart.byStore[storeCode] || []
-      : []
+    const itemsForStore = storeCode ? state.cart.byStore[storeCode] || [] : []
 
     const byStore = state.user.byStore || {}
     const userForStore = storeCode ? byStore[storeCode] || null : null
@@ -28,40 +26,66 @@ export default function Checkout() {
     }
   })
 
-  // 🔸 Build items payload in the *same shape* as company checkout
-  const itemsPayload = useMemo(
-    () =>
-      (cartItems || []).map(i => ({
-        // Try to be flexible with ids, so it works with your current cart shape
-        itemId: i.itemId || i.foodItem?.id || i.id,
-        quantity: i.quantity || 1,
-        modifierOptionIds: (
-          i.selectedAddOns ||          // our newer add-ons
-          i.modifiers || []           // older company-style modifiers (if present)
-        ).map(m => m._id || m.id)
-      })),
-    [cartItems]
-  )
+  // ✅ items payload for backend
+// ✅ helper: force cents
+const toCents = (v) => {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.round(n) : 0
+}
+
+const itemsPayload = useMemo(() => {
+  return (cartItems || []).map(i => {
+    const qty = i.quantity || 1
+
+    // ✅ all cents
+    const basePrice = toCents(i.selectedVariant?.price || i.price || 0)
+
+    const addonsPrice = (i.selectedAddOns || []).reduce(
+      (s, a) => s + toCents(a.price),
+      0
+    )
+
+    const modsPrice = (i.selectedModifiers || []).reduce(
+      (s, m) => s + toCents(m.price),
+      0
+    )
+
+    const unit_price = basePrice + addonsPrice + modsPrice
+    const total_price = unit_price * qty
+
+    return {
+      menu_item: i.itemId || i.foodItem?.id || i.id,
+      name: i.foodItem?.name || i.name || "Item",
+      item_name: i.foodItem?.name || i.name || "Item",
+
+      // ✅ send qty and cents
+      qty,
+      unit_price,
+      total_price
+    }
+  })
+}, [cartItems])
+
 
   const getCartTotal = () =>
     (cartItems || []).reduce((total, item) => {
-      const basePrice = item.selectedVariant?.price || item.price
+      const basePrice = item.selectedVariant?.price || item.price || 0
       const addOnsPrice = (item.selectedAddOns || []).reduce(
-        (sum, addon) => sum + addon.price,
+        (sum, addon) => sum + (Number(addon.price) || 0),
         0
       )
-      return total + (basePrice + addOnsPrice) * (item.quantity || 1)
+      const modifiersPrice = (item.selectedModifiers || []).reduce(
+        (sum, mod) => sum + (Number(mod.price) || 0),
+        0
+      )
+      return total + (basePrice + addOnsPrice + modifiersPrice) * (item.quantity || 1)
     }, 0)
 
   const handleBack = () => {
-    if (currentStore) {
-      navigate(`/s/${currentStore}`)
-    } else {
-      navigate(-1)
-    }
+    if (currentStore) navigate(`/s/${currentStore}`)
+    else navigate(-1)
   }
 
-  // 🔥 Secure checkout – similar logic to company Checkout.jsx.placeOrder
   const handleGoToPayment = async orderDetails => {
     if (!orderDetails?.items?.length) {
       toast.error("Your cart is empty")
@@ -76,71 +100,79 @@ export default function Checkout() {
     try {
       setIsPlacingOrder(true)
 
-      const customer = {
-        name: orderDetails.userDetails?.name || "",
+      // 1) create customer
+      const custRes = await api.post("/api/method/ultipos.api.checkout.create_or_update", {
         phone: orderDetails.userDetails?.phone || "",
-        email: orderDetails.userDetails?.email || "",
-        address: orderDetails.deliveryAddress || ""
+        name: orderDetails.userDetails?.name || "",
+        email: orderDetails.userDetails?.email || ""
+      })
+
+      const customer_id = custRes?.data?.message?.customer_id
+      if (!customer_id) {
+        toast.error("Failed to create customer")
+        return
       }
 
-      const payload = {
-        customer,
-        items: itemsPayload,
-        // Later we can add UI toggle for PICKUP/DELIVERY – for now, use DELIVERY
-        fulfillment: { type: "DELIVERY" },
-        coupon: orderDetails.appliedCoupon?.code || undefined
+      // 2) place order
+   const orderRes = await api.post("/api/method/ultipos.api.order.place", {
+  outlet_code: currentStore,
+  customer_id,
+  items: itemsPayload,
+
+  // ✅ THIS is the real dynamic final amount (CENTS)
+  total: orderDetails.total,
+
+  payment: {
+    method: orderDetails.paymentMethod === "online" ? "Online" : "Cash",
+    transaction_id: "TX-" + Date.now()
+  }
+})
+
+
+      const orderData = orderRes?.data?.message
+      console.log("ORDER PLACE RESPONSE:", orderData)
+
+      if (!orderData?.order_id) {
+        toast.error("Order failed. order_id missing.")
+        return
       }
 
-      // 🔒 Hit secure backend checkout endpoint (same as company)
-      const res = await api.post(
-        `/ultipos-online/${currentStore}/checkout`,
-        payload
-      )
-
-      const body = res.data || res
-      const payment = body.payment || {}
-      const orderId =
-        body.orderId || (body.data && body.data.orderId) || null
-
-      if (payment.redirectUrl) {
-        // Hosted payment page (Worldline)
-        window.location.assign(payment.redirectUrl)
-      } else if (orderId) {
-        // No hosted payment, but order created – go to status page
-        navigate(`/order-status/${orderId}`)
-      } else {
-        toast.error("Unexpected checkout response")
+      // ✅ ONLINE → redirect to payment page
+      if (orderDetails.paymentMethod === "online") {
+        if (orderData?.payment_url) {
+          window.location.assign(orderData.payment_url)
+          return
+        }
+        toast.error("payment_url missing")
+        return
       }
+
+      // ✅ CASH → directly go to status
+      navigate(`/order-status/${orderData.order_id}`)
     } catch (err) {
-      console.error("checkout error", err)
-      const msg =
-        err?.response?.data?.error ||
-        err?.response?.data?.message ||
-        "Checkout failed"
-      toast.error(msg)
+      console.error(err)
+      toast.error(err?.response?.data?.message || "Checkout failed")
     } finally {
       setIsPlacingOrder(false)
     }
   }
 
-  // If cart is empty, push user back like before
+  // ✅ if cart empty
   if (!cartItems || cartItems.length === 0) {
-    if (currentStore) {
-      navigate(`/s/${currentStore}`)
-    } else {
-      navigate("/")
-    }
+    if (currentStore) navigate(`/s/${currentStore}`)
+    else navigate("/")
     return null
   }
 
   return (
     <OrderPage
       cartItems={cartItems}
-      userDetails={savedUser}    // ✅ per-store user
+      userDetails={savedUser}
       onBack={handleBack}
-      onPlaceOrder={handleGoToPayment}   // 🔥 now calls secure backend
-      placingOrder={isPlacingOrder}      // ⬅️ to disable button while loading
+      onPlaceOrder={handleGoToPayment}
+      placingOrder={isPlacingOrder}
       total={getCartTotal()}
+      storeCode={currentStore}
     />
   )
 }

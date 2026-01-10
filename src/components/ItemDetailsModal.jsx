@@ -1,29 +1,40 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { X, Plus, Minus, Star, Clock, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "react-hot-toast"
 import { formatPriceAUD } from "../utils/currency"
 
 export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
+  // ✅ SAFE FALLBACK
+  const safeItem = item || {}
+
   const [quantity, setQuantity] = useState(1)
-  const [selectedVariant, setSelectedVariant] = useState(item?.variants?.[0])
+  const [selectedVariant, setSelectedVariant] = useState(null)
   const [selectedAddOns, setSelectedAddOns] = useState([])
   const [specialInstructions, setSpecialInstructions] = useState("")
 
+  // ✅ MODIFIERS STATE
+  const [selectedModifiers, setSelectedModifiers] = useState({})
 
-    useEffect(() => {
+  // ✅ modifiers always safe
+  const modifiers = useMemo(() => {
+    return Array.isArray(safeItem.modifiers) ? safeItem.modifiers : []
+  }, [safeItem.modifiers])
+
+  useEffect(() => {
     if (isOpen && item) {
       setQuantity(1)
       setSelectedVariant(item.variants?.[0] || null)
       setSelectedAddOns([])
       setSpecialInstructions("")
+      setSelectedModifiers({})
     }
   }, [isOpen, item])
 
-
-  if (!isOpen || !item) return null
-
+  // -----------------------------
+  // HELPERS
+  // -----------------------------
   const handleAddOnToggle = addon => {
     setSelectedAddOns(prev =>
       prev.find(a => a.id === addon.id)
@@ -32,40 +43,125 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
     )
   }
 
+  const setModifierValue = (groupName, optionId, mode = "single") => {
+    setSelectedModifiers(prev => {
+      const next = { ...prev }
+      const current = Array.isArray(next[groupName]) ? next[groupName] : []
+
+      if (mode === "single") {
+        next[groupName] = [optionId]
+        return next
+      }
+
+      // multi
+      if (current.includes(optionId)) {
+        next[groupName] = current.filter(x => x !== optionId)
+      } else {
+        next[groupName] = [...current, optionId]
+      }
+
+      return next
+    })
+  }
+
+  // ✅ selected modifier objects (store full details)
+  const selectedModifierObjects = useMemo(() => {
+    const output = []
+
+    for (const mod of modifiers) {
+      const group = mod.group
+      const selected = selectedModifiers[group] || []
+
+      for (const opt of mod.options || []) {
+        if (selected.includes(opt.id)) {
+          output.push({
+            group,
+            id: opt.id,
+            name: opt.name,
+            price: Number(opt.price ?? 0)
+          })
+        }
+      }
+    }
+
+    return output
+  }, [modifiers, selectedModifiers])
+
+  const modifiersTotal = useMemo(() => {
+    return selectedModifierObjects.reduce((sum, o) => sum + (o.price || 0), 0)
+  }, [selectedModifierObjects])
+
   const calculateTotal = () => {
-    const basePrice = selectedVariant?.price || item.price
+    const basePrice = Number(selectedVariant?.price ?? safeItem.price ?? 0)
+
     const addOnsPrice = (selectedAddOns || []).reduce(
-      (sum, addon) => sum + addon.price,
+      (sum, addon) => sum + (Number(addon.price) || 0),
       0
     )
-    return (basePrice + addOnsPrice) * quantity
+
+    return (basePrice + addOnsPrice + modifiersTotal) * quantity
+  }
+
+  const validateModifiers = () => {
+    for (const mod of modifiers) {
+      const required = Number(mod.required || 0) === 1
+      const group = mod.group
+      const sel = selectedModifiers[group] || []
+
+      if (required && sel.length === 0) {
+        toast.error(`Please choose an option for "${group}"`)
+        return false
+      }
+
+      const min = Number(mod.min ?? 0)
+      const max = Number(mod.max ?? 0)
+
+      if (min > 0 && sel.length < min) {
+        toast.error(`Please select at least ${min} options for "${group}"`)
+        return false
+      }
+
+      if (max > 0 && sel.length > max) {
+        toast.error(`You can select max ${max} options for "${group}"`)
+        return false
+      }
+    }
+    return true
   }
 
   const handleAddToCartClick = () => {
+    if (!validateModifiers()) return
+
     onAddToCart(
-      item,
+      {
+        ...safeItem,
+        selectedModifiers: selectedModifierObjects,
+        selectedAddOns: selectedAddOns,
+        selectedVariant: selectedVariant,
+        specialInstructions
+      },
       quantity,
       selectedVariant,
       selectedAddOns,
       specialInstructions
     )
 
-    toast.success(`${item.name} added to cart`)
-
+    toast.success(`${safeItem.name} added to cart`)
     onClose()
-    setQuantity(1)
-    setSelectedAddOns([])
-    setSpecialInstructions("")
   }
 
+  // ✅ NOW SAFE to return AFTER hooks
+  if (!isOpen || !item) return null
+
+  // -----------------------------
+  // UI
+  // -----------------------------
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm px-2 sm:px-4 animate-fadeIn">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-slideUp">
         {/* Header */}
         <div className="sticky top-0 bg-white/95 backdrop-blur border-b px-4 sm:px-6 py-3 flex justify-between items-center">
-          <h2 className="text-base sm:text-lg font-semibold">
-            Item Details
-          </h2>
+          <h2 className="text-base sm:text-lg font-semibold">Item Details</h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-4 h-4" />
           </Button>
@@ -76,163 +172,90 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
           <div className="flex flex-col md:flex-row gap-4 md:gap-6">
             <div className="w-full md:w-52 shrink-0">
               <img
-                src={item.image || "/placeholder.svg"}
-                alt={item.name}
+                src={safeItem.image || "/placeholder.svg"}
+                alt={safeItem.name}
                 className="w-full h-40 md:h-36 object-cover rounded-xl shadow-sm"
               />
             </div>
 
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
-                <div
-                  className={`w-4 h-4 border-2 flex items-center justify-center rounded-sm ${
-                    item.isVeg ? "border-green-500" : "border-red-500"
-                  }`}
-                >
-                  <div
-                    className={`w-2 h-2 rounded-sm ${
-                      item.isVeg ? "bg-green-500" : "bg-red-500"
-                    }`}
-                  />
-                </div>
                 <h3 className="text-lg sm:text-2xl font-semibold">
-                  {item.name}
+                  {safeItem.name}
                 </h3>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 mb-3 text-xs sm:text-sm">
-                <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <span className="font-medium">
-                    {item.rating ?? 0}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 text-gray-600">
-                  <Clock className="w-4 h-4" />
-                  <span>{item.preparationTime || "—"}</span>
-                </div>
-                <div className="flex items-center gap-1 text-gray-600">
-                  <Users className="w-4 h-4" />
-                  <span>Serves {item.serves ?? 1}</span>
-                </div>
-              </div>
-
               <p className="text-sm text-gray-600 mb-3 sm:mb-4">
-                {item.description || "No description available."}
+                {safeItem.description || "No description available."}
               </p>
-
-              <div className="flex flex-wrap gap-1.5">
-                {(item.tags || []).map(tag => (
-                  <span
-                    key={tag}
-                    className={`px-2.5 py-1 text-[10px] sm:text-xs rounded-full border transition-colors ${
-                      tag.includes("Chef") || tag.includes("Restaurant")
-                        ? "bg-blue-50 text-blue-600 border-blue-100"
-                        : tag.includes("Spicy")
-                        ? "bg-red-50 text-red-600 border-red-100"
-                        : "bg-gray-50 text-gray-600 border-gray-100"
-                    }`}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
 
-          {/* Ingredients */}
-          <div>
-            <h4 className="font-semibold text-sm sm:text-base mb-1.5">
-              Ingredients
-            </h4>
-            <p className="text-sm text-gray-600">
-              {(item.ingredients || []).length
-                ? (item.ingredients || []).join(", ")
-                : "Not specified."}
-            </p>
-          </div>
+          {/* ✅ MODIFIERS */}
+          {modifiers.length > 0 && (
+            <div className="space-y-4">
+              <h4 className="font-semibold text-sm sm:text-base">Customize</h4>
 
-          {/* Variants */}
-          {item.variants && item.variants.length > 0 && (
-            <div>
-              <h4 className="font-semibold text-sm sm:text-base mb-2">
-                Choose Size
-              </h4>
-              <div className="space-y-2">
-                {item.variants.map(variant => (
-                  <label
-                    key={variant.id}
-                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition-all ${
-                      selectedVariant?.id === variant.id
-                        ? "border-orange-500 bg-orange-50"
-                        : "border-gray-200 hover:bg-gray-50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="radio"
-                        name="variant"
-                        checked={selectedVariant?.id === variant.id}
-                        onChange={() => setSelectedVariant(variant)}
-                        className="text-orange-500"
-                      />
-                      <span className="text-sm">{variant.name}</span>
-                    </div>
-                    <span className="text-sm font-medium">
-                      {formatPriceAUD(variant.price)}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
+              {modifiers.map(mod => {
+                const group = mod.group
+                const required = Number(mod.required || 0) === 1
+                const max = Number(mod.max ?? 0)
+                const mode = max > 1 ? "multi" : "single"
 
-          {/* Add-ons */}
-          {item.addOns && item.addOns.length > 0 && (
-            <div>
-              <h4 className="font-semibold text-sm sm:text-base mb-2">
-                Add-ons
-              </h4>
-              <div className="space-y-2">
-                {item.addOns.map(addon => (
-                  <label
-                    key={addon.id}
-                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition-all ${
-                      selectedAddOns.some(a => a.id === addon.id)
-                        ? "border-orange-500 bg-orange-50"
-                        : "border-gray-200 hover:bg-gray-50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedAddOns.some(a => a.id === addon.id)}
-                        onChange={() => handleAddOnToggle(addon)}
-                        className="text-orange-500"
-                      />
+                const selected = selectedModifiers[group] || []
+
+                return (
+                  <div key={group} className="border border-gray-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <div
-                          className={`w-3 h-3 border rounded-[3px] flex items-center justify-center ${
-                            addon.isVeg
-                              ? "border-green-500"
-                              : "border-red-500"
-                          }`}
-                        >
-                          <div
-                            className={`w-1.5 h-1.5 rounded-[2px] ${
-                              addon.isVeg ? "bg-green-500" : "bg-red-500"
-                            }`}
-                          />
-                        </div>
-                        <span className="text-sm">{addon.name}</span>
+                        <h5 className="font-bold text-sm text-gray-900">{group}</h5>
+                        {required && (
+                          <span className="text-[10px] font-bold text-white bg-orange-500 px-2 py-0.5 rounded-full">
+                            REQUIRED
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-gray-500 font-medium">
+                        {mode === "multi" ? `Choose up to ${max}` : "Choose 1"}
                       </div>
                     </div>
-                    <span className="text-sm font-medium">
-                      {formatPriceAUD(addon.price)}
-                    </span>
-                  </label>
-                ))}
-              </div>
+
+                    <div className="space-y-2">
+                      {(mod.options || []).map(opt => {
+                        const isSelected = selected.includes(opt.id)
+                        const optPrice = Number(opt.price ?? 0)
+
+                        return (
+                          <label
+                            key={opt.id}
+                            className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition-all ${
+                              isSelected
+                                ? "border-orange-500 bg-orange-50"
+                                : "border-gray-200 hover:bg-gray-50"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <input
+                                type={mode === "multi" ? "checkbox" : "radio"}
+                                name={group}
+                                checked={isSelected}
+                                onChange={() => setModifierValue(group, opt.id, mode)}
+                                className="text-orange-500"
+                              />
+                              <span className="text-sm font-medium">{opt.name}</span>
+                            </div>
+
+                            <span className="text-sm font-bold text-gray-900">
+                              {optPrice > 0 ? `+ ${formatPriceAUD(optPrice)}` : "Free"}
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
 
@@ -244,7 +267,7 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
             <textarea
               value={specialInstructions}
               onChange={e => setSpecialInstructions(e.target.value)}
-              placeholder="Any special requests? (e.g., less spicy, extra sauce)"
+              placeholder="Any special requests?"
               className="w-full p-3 border rounded-lg resize-none text-sm"
               rows={3}
             />
@@ -253,23 +276,17 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
           {/* Quantity and Add to Cart */}
           <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between border-t pt-4">
             <div className="flex items-center gap-3">
-              <span className="font-medium text-sm sm:text-base">
-                Quantity:
-              </span>
+              <span className="font-medium text-sm sm:text-base">Quantity:</span>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="icon"
-                  onClick={() =>
-                    setQuantity(prev => Math.max(1, prev - 1))
-                  }
+                  onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
                   className="h-8 w-8"
                 >
                   <Minus className="w-4 h-4" />
                 </Button>
-                <span className="w-8 text-center text-sm font-medium">
-                  {quantity}
-                </span>
+                <span className="w-8 text-center text-sm font-medium">{quantity}</span>
                 <Button
                   variant="outline"
                   size="icon"
@@ -293,20 +310,10 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
 
       {/* Light animations */}
       <style>{`
-        @keyframes fadeInOverlay {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideUpModal {
-          from { opacity: 0; transform: translateY(24px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-          animation: fadeInOverlay 0.2s ease-out;
-        }
-        .animate-slideUp {
-          animation: slideUpModal 0.25s ease-out;
-        }
+        @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUpModal { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fadeIn { animation: fadeInOverlay 0.2s ease-out; }
+        .animate-slideUp { animation: slideUpModal 0.25s ease-out; }
       `}</style>
     </div>
   )

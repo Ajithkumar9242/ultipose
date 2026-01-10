@@ -43,34 +43,41 @@ export function CouponModal({
 
     let cancelled = false
 
-    const fetchCoupons = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await api.get(
-          `/promotions/store/${storeCode}/active`
-        )
-        // Backend returns: { data: [ ...promotions ] }
-        const promos = res.data?.data || []
-        console.log("Promotions API raw:", promos)
+const fetchCoupons = async () => {
+  setLoading(true)
+  setError(null)
 
-        const mapped = promos.map(mapPromotionToCoupon)
+  try {
+    const res = await api.get("/api/method/ultipos.api.coupon.get_active", {
+      params: { outlet_code: storeCode }
+    })
 
-        if (!cancelled) {
-          setAvailableCoupons(mapped)
-        }
-      } catch (err) {
-        console.error("Failed to load coupons", err)
-        if (!cancelled) {
-          setError("Failed to load coupons")
-          setAvailableCoupons([])
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
+    const coupons = res?.data?.message || []
+
+    const mapped = coupons.map(c => ({
+      code: c.coupon_code,
+      title: c.coupon_code,
+      description: "",
+      type: c.discount_type === "Percentage" ? "percentage" : "fixed",
+      discount: Number(c.discount_value || 0),
+      minOrder: Number(c.min_order_amount || 0),
+      maxDiscount: c.max_discount ? Number(c.max_discount) : null
+    }))
+
+    if (!cancelled) {
+      setAvailableCoupons(mapped)
     }
+  } catch (err) {
+    console.error("Failed to load coupons", err)
+    if (!cancelled) {
+      setError("Failed to load coupons")
+      setAvailableCoupons([])
+    }
+  } finally {
+    if (!cancelled) setLoading(false)
+  }
+}
+
 
     fetchCoupons()
 

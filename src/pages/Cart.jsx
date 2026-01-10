@@ -37,7 +37,7 @@ const Cart = () => {
       <div className="space-y-4">
         {cartItems.map((item) => (
           <div
-            key={item.id}
+            key={item.cartKey}
             className="flex items-center border p-2 rounded justify-between"
           >
             <div className="flex items-center gap-3">
@@ -54,7 +54,7 @@ const Cart = () => {
             <div className="flex items-center gap-2">
               <button
               onClick={() => {
-  dispatch(decreaseQuantity(item.id));
+  dispatch(decreaseQuantity(item.cartKey));
   toast.success('Decreased quantity');
 }}
 
@@ -65,7 +65,7 @@ const Cart = () => {
               <span>{item.quantity}</span>
               <button
                 onClick={() => {
-  dispatch(increaseQuantity(item.id));
+  dispatch(increaseQuantity(item.cartKey));
   toast.success('Increased quantity');
 }}
                 className="px-2 py-1 border rounded"

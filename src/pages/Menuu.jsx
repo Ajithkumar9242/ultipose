@@ -99,23 +99,19 @@ export default function Menuu() {
         }
 
         // ✅ flatten items
-        const items = data.categories.flatMap(cat =>
-          (cat.items || []).map(i => ({
-            id: i.item_id,
-            name: i.name,
-            price: i.price,
-            image: i.image,
-            description: i.description,
-            category: cat.category_name || "Menu",
-            isVeg: !!i.is_veg,
-            rating: 4.2,
-            tags: [],
-            variants: [],
-            addOns: [],
-            customizable: (i.modifiers || []).length > 0,
-            modifiers: i.modifiers || []
-          }))
-        )
+const items = (data.categories || []).flatMap(cat =>
+  (cat.items || []).map(i => ({
+    id: i.item_id,
+    name: i.name,
+    price: i.price,
+    image: i.image || "",
+    description: i.description || "",
+    category: cat.category_id || "Menu",
+
+    customizable: Array.isArray(i.modifiers) && i.modifiers.length > 0,
+    modifiers: i.modifiers || []
+  }))
+)
 
         setFoodItems(items)
 
@@ -164,10 +160,26 @@ export default function Menuu() {
   const getCartTotal = () =>
     cartItems.reduce((t, i) => t + (i.price || 0) * (i.quantity || 1), 0)
 
-  const handleAddButtonClick = item => {
-    dispatch(addItem({ ...item, quantity: 1 }))
-    toast.success(`${item.name} added`)
+const handleAddButtonClick = item => {
+  if (item.customizable) {
+    setSelectedItem(item)
+    return
   }
+
+  dispatch(
+    addItem({
+      ...item,
+      quantity: 1,
+      selectedVariant: null,
+      selectedAddOns: [],
+      selectedModifiers: [],
+      specialInstructions: ""
+    })
+  )
+
+  toast.success(`${item.name} added`)
+}
+
 
   const handleCheckout = () => {
     dispatch(setIsOpen(false))
@@ -188,6 +200,24 @@ export default function Menuu() {
     setIsAuthOpen(false)
     navigate("/checkout")
   }
+const handleAddToCart = (
+  item,
+  quantity = 1,
+  selectedVariant,
+  selectedAddOns = [],
+  specialInstructions
+) => {
+  dispatch(
+    addItem({
+      ...item,
+      quantity,
+      selectedVariant,
+      selectedAddOns,
+      specialInstructions,
+      selectedModifiers: item.selectedModifiers || []
+    })
+  )
+}
 
   // -------------------- UI STATES --------------------
   if (loading) return <LoadingScreen />
@@ -271,10 +301,10 @@ export default function Menuu() {
         isOpen={isCartOpen}
         onClose={() => dispatch(setIsOpen(false))}
         cartItems={cartItems}
-        onUpdateQuantity={(id, q) =>
-          dispatch(updateQuantity({ id, quantity: q }))
+        onUpdateQuantity={(cartKey, quantity) =>
+          dispatch(updateQuantity({ cartKey, quantity }))
         }
-        onRemoveItem={id => dispatch(removeItem(id))}
+        onRemoveItem={cartKey => dispatch(removeItem(cartKey))}
         onCheckout={handleCheckout}
         total={getCartTotal()}
       />

@@ -31,28 +31,36 @@ export function CheckoutModal({
   const taxes = Math.round(total * 0.05) // 5% tax on subtotal (still cents)
   const finalTotal = total + deliveryFee + taxes
 
-  const handlePlaceOrder = async () => {
-    setIsProcessing(true)
+const handlePlaceOrder = async () => {
+  setIsProcessing(true)
 
-    // Simulate order processing
-    await new Promise(resolve => setTimeout(resolve, 2000))
-
+  try {
     const orderDetails = {
       items: cartItems,
-      address,
+      userDetails: address,
       paymentMethod,
       subtotal: total,
       deliveryFee,
       taxes,
-      total: finalTotal,
-      orderId: `MF${Date.now()}`,
-      estimatedDelivery: "45-50 mins"
+      total: finalTotal
     }
 
-    onPlaceOrder(orderDetails)
-    setIsProcessing(false)
+    const result = await onPlaceOrder(orderDetails)
+
+    // ✅ If backend gives payment_url → redirect to gateway
+    if (result?.payment_url) {
+      window.location.href = result.payment_url
+      return
+    }
+
+    // ✅ If COD → show success screen
     setStep(3)
+  } catch (e) {
+    console.error(e)
+  } finally {
+    setIsProcessing(false)
   }
+}
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
