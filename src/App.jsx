@@ -11,6 +11,7 @@ import NotFound from "./pages/NotFound"
 import PaymentReturn from "./pages/PaymentReturn"
 import OrderStatusPage from "./pages/OrderStatus"
 import FakeWorldline from "./pages/FakeWorldline"
+import Payment from "./pages/Payment"
 
 function App() {
   return (
@@ -40,6 +41,9 @@ function App() {
             />
           }
         />
+
+        <Route path="/payment" element={<Payment />} />
+
 <Route path="/worldline-pay" element={<FakeWorldline />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/cart" element={<Cart />} />

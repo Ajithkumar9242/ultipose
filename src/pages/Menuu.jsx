@@ -21,7 +21,6 @@ import {
   addItem,
   removeItem,
   updateQuantity,
-  clearCart,
   setIsOpen,
   setCurrentStore
 } from "../redux/store"
@@ -86,10 +85,9 @@ export default function Menuu() {
         setLoading(true)
         setStoreNotFound(false)
 
-        const res = await api.get(
-          "/api/method/ultipos.api.menu.get_menu",
-          { params: { outlet_code: outletCode } }
-        )
+        const res = await api.get("/api/method/ultipos.api.menu.get_menu", {
+          params: { outlet_code: outletCode }
+        })
 
         const data = res?.data?.message
 
@@ -98,23 +96,42 @@ export default function Menuu() {
           return
         }
 
-        // ✅ flatten items
-const items = (data.categories || []).flatMap(cat =>
-  (cat.items || []).map(i => ({
-    id: i.item_id,
-    name: i.name,
-    price: i.price,
-    image: i.image || "",
-    description: i.description || "",
-    category: cat.category_id || "Menu",
+        // ✅ flatten items from API
+        const items = (data.categories || []).flatMap(cat =>
+          (cat.items || []).map(i => {
+            const customizations = Array.isArray(i.customizations)
+              ? i.customizations
+              : []
 
-    customizable: Array.isArray(i.modifiers) && i.modifiers.length > 0,
-    modifiers: i.modifiers || []
-  }))
-)
+            return {
+              id: i.item_id,
+              name: i.name,
+              price: Number(i.price || 0),
+              image: i.image || "",
+              description: i.description || "",
+
+              // ✅ category should be category_name (for sidebar)
+              category: cat.category_name || cat.category_id || "Menu",
+
+              // ✅ backend returns customizations
+              customizations,
+
+              // ✅ IMPORTANT
+              customizable: customizations.length > 0,
+
+              // optional safe extras
+              isVeg: i.isVeg ?? true,
+              variants: i.variants || [],
+              addOns: i.addOns || [],
+              tags: i.tags || [],
+              rating: i.rating || 4.5
+            }
+          })
+        )
 
         setFoodItems(items)
 
+        // ✅ sidebar categories
         const categoryNames = [
           "Menu",
           ...data.categories.map(c => c.category_name).filter(Boolean)
@@ -158,28 +175,42 @@ const items = (data.categories || []).flatMap(cat =>
     cartItems.reduce((t, i) => t + (i.quantity || 1), 0)
 
   const getCartTotal = () =>
-    cartItems.reduce((t, i) => t + (i.price || 0) * (i.quantity || 1), 0)
+    cartItems.reduce((t, i) => {
+      const base = Number(i.selectedVariant?.price ?? i.price ?? 0)
 
-const handleAddButtonClick = item => {
-  if (item.customizable) {
-    setSelectedItem(item)
-    return
+      const addOnsPrice = (i.selectedAddOns || []).reduce(
+        (sum, addon) => sum + Number(addon.price || 0),
+        0
+      )
+
+      const modsPrice = (i.selectedModifiers || []).reduce(
+        (sum, m) => sum + Number(m.price || 0),
+        0
+      )
+
+      return t + (base + addOnsPrice + modsPrice) * (i.quantity || 1)
+    }, 0)
+
+  // ✅ if customizable => open modal, else direct add
+  const handleAddButtonClick = item => {
+    if (item.customizable) {
+      setSelectedItem(item)
+      return
+    }
+
+    dispatch(
+      addItem({
+        ...item,
+        quantity: 1,
+        selectedVariant: null,
+        selectedAddOns: [],
+        selectedModifiers: [],
+        specialInstructions: ""
+      })
+    )
+
+    toast.success(`${item.name} added`)
   }
-
-  dispatch(
-    addItem({
-      ...item,
-      quantity: 1,
-      selectedVariant: null,
-      selectedAddOns: [],
-      selectedModifiers: [],
-      specialInstructions: ""
-    })
-  )
-
-  toast.success(`${item.name} added`)
-}
-
 
   const handleCheckout = () => {
     dispatch(setIsOpen(false))
@@ -200,24 +231,26 @@ const handleAddButtonClick = item => {
     setIsAuthOpen(false)
     navigate("/checkout")
   }
-const handleAddToCart = (
-  item,
-  quantity = 1,
-  selectedVariant,
-  selectedAddOns = [],
-  specialInstructions
-) => {
-  dispatch(
-    addItem({
-      ...item,
-      quantity,
-      selectedVariant,
-      selectedAddOns,
-      specialInstructions,
-      selectedModifiers: item.selectedModifiers || []
-    })
-  )
-}
+
+  // ✅ CALLED FROM MODAL (this is important)
+  const handleAddToCart = (
+    item,
+    quantity = 1,
+    selectedVariant,
+    selectedAddOns = [],
+    specialInstructions = ""
+  ) => {
+    dispatch(
+      addItem({
+        ...item,
+        quantity,
+        selectedVariant,
+        selectedAddOns,
+        specialInstructions,
+        selectedModifiers: item.selectedModifiers || []
+      })
+    )
+  }
 
   // -------------------- UI STATES --------------------
   if (loading) return <LoadingScreen />
@@ -259,6 +292,7 @@ const handleAddToCart = (
                 />
 
                 <h3 className="font-bold text-lg">{item.name}</h3>
+
                 {item.description && (
                   <p className="text-gray-500 text-sm line-clamp-2">
                     {item.description}
@@ -266,9 +300,7 @@ const handleAddToCart = (
                 )}
 
                 <div className="flex justify-between items-center mt-3">
-                  <span className="font-bold">
-                    {formatPriceAUD(item.price)}
-                  </span>
+                  <span className="font-bold">{formatPriceAUD(item.price)}</span>
 
                   <Button
                     onClick={() => handleAddButtonClick(item)}
@@ -277,6 +309,12 @@ const handleAddToCart = (
                     ADD <Plus size={14} className="ml-1" />
                   </Button>
                 </div>
+
+                {item.customizable && (
+                  <p className="text-[11px] text-orange-600 font-semibold mt-2">
+                    Customizable
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -290,11 +328,12 @@ const handleAddToCart = (
         </main>
       </div>
 
+      {/* ✅ MODAL */}
       <ItemDetailsModal
         item={selectedItem}
         isOpen={!!selectedItem}
         onClose={() => setSelectedItem(null)}
-        onAddToCart={item => dispatch(addItem({ ...item, quantity: 1 }))}
+        onAddToCart={handleAddToCart}
       />
 
       <CartSidebar

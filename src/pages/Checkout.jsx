@@ -12,73 +12,67 @@ export default function Checkout() {
   const navigate = useNavigate()
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
 
-  const { cartItems, currentStore, savedUser } = useSelector(state => {
-    const storeCode = state.cart.currentStore
-    const itemsForStore = storeCode ? state.cart.byStore[storeCode] || [] : []
+  // ✅ fix redux warning (no selector object creation)
+  const currentStore = useSelector(state => state.cart.currentStore)
 
+  const cartItems = useSelector(state =>
+    currentStore ? state.cart.byStore[currentStore] || [] : []
+  )
+
+  const savedUser = useSelector(state => {
     const byStore = state.user.byStore || {}
-    const userForStore = storeCode ? byStore[storeCode] || null : null
-
-    return {
-      cartItems: itemsForStore,
-      currentStore: storeCode,
-      savedUser: userForStore
-    }
+    return currentStore ? byStore[currentStore] || null : null
   })
 
-  // ✅ items payload for backend
-// ✅ helper: force cents
-const toCents = (v) => {
-  const n = Number(v)
-  return Number.isFinite(n) ? Math.round(n) : 0
-}
+  // ✅ helper
+  const toNumber = v => {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : 0
+  }
 
-const itemsPayload = useMemo(() => {
-  return (cartItems || []).map(i => {
-    const qty = i.quantity || 1
+  // ✅ items payload EXACTLY for order.py -> build_order_items()
+  const itemsPayload = useMemo(() => {
+    return (cartItems || []).map(i => {
+      const qty = toNumber(i.quantity || 1)
 
-    // ✅ all cents
-    const basePrice = toCents(i.selectedVariant?.price || i.price || 0)
+      const base = toNumber(i.selectedVariant?.price ?? i.price ?? 0)
 
-    const addonsPrice = (i.selectedAddOns || []).reduce(
-      (s, a) => s + toCents(a.price),
-      0
-    )
+      const addons = (i.selectedAddOns || []).reduce(
+        (s, a) => s + toNumber(a.price),
+        0
+      )
 
-    const modsPrice = (i.selectedModifiers || []).reduce(
-      (s, m) => s + toCents(m.price),
-      0
-    )
+      const mods = (i.selectedModifiers || []).reduce(
+        (s, m) => s + toNumber(m.price),
+        0
+      )
 
-    const unit_price = basePrice + addonsPrice + modsPrice
-    const total_price = unit_price * qty
+      const unit_price = base + addons + mods
+      const total_price = unit_price * qty
 
-    return {
-      menu_item: i.itemId || i.foodItem?.id || i.id,
-      name: i.foodItem?.name || i.name || "Item",
-      item_name: i.foodItem?.name || i.name || "Item",
+      return {
+        menu_item: i.id,
+        item_name: i.name,
+        qty,
+        unit_price,
+        total_price
+      }
+    })
+  }, [cartItems])
 
-      // ✅ send qty and cents
-      qty,
-      unit_price,
-      total_price
-    }
-  })
-}, [cartItems])
-
-
+  // ✅ total
   const getCartTotal = () =>
     (cartItems || []).reduce((total, item) => {
-      const basePrice = item.selectedVariant?.price || item.price || 0
-      const addOnsPrice = (item.selectedAddOns || []).reduce(
-        (sum, addon) => sum + (Number(addon.price) || 0),
+      const base = toNumber(item.selectedVariant?.price ?? item.price ?? 0)
+      const addons = (item.selectedAddOns || []).reduce(
+        (s, a) => s + toNumber(a.price),
         0
       )
-      const modifiersPrice = (item.selectedModifiers || []).reduce(
-        (sum, mod) => sum + (Number(mod.price) || 0),
+      const mods = (item.selectedModifiers || []).reduce(
+        (s, m) => s + toNumber(m.price),
         0
       )
-      return total + (basePrice + addOnsPrice + modifiersPrice) * (item.quantity || 1)
+      return total + (base + addons + mods) * toNumber(item.quantity || 1)
     }, 0)
 
   const handleBack = () => {
@@ -87,7 +81,7 @@ const itemsPayload = useMemo(() => {
   }
 
   const handleGoToPayment = async orderDetails => {
-    if (!orderDetails?.items?.length) {
+    if (!itemsPayload.length) {
       toast.error("Your cart is empty")
       return
     }
@@ -100,58 +94,90 @@ const itemsPayload = useMemo(() => {
     try {
       setIsPlacingOrder(true)
 
-      // 1) create customer
-      const custRes = await api.post("/api/method/ultipos.api.checkout.create_or_update", {
-        phone: orderDetails.userDetails?.phone || "",
-        name: orderDetails.userDetails?.name || "",
-        email: orderDetails.userDetails?.email || ""
-      })
+      // ✅ customer object (used ONLY for create_or_update)
+      const customerObj = {
+        name: orderDetails?.userDetails?.name || savedUser?.name || "",
+        phone: orderDetails?.userDetails?.phone || savedUser?.phone || "",
+        email: orderDetails?.userDetails?.email || savedUser?.email || ""
+      }
+
+      if (!customerObj.phone) {
+        toast.error("Phone number required")
+        return
+      }
+
+      // ✅ 1) create/update customer -> get customer_id
+      const custRes = await api.post(
+        "/api/method/ultipos.api.checkout.create_or_update",
+        customerObj
+      )
 
       const customer_id = custRes?.data?.message?.customer_id
+
       if (!customer_id) {
         toast.error("Failed to create customer")
         return
       }
 
-      // 2) place order
-   const orderRes = await api.post("/api/method/ultipos.api.order.place", {
-  outlet_code: currentStore,
-  customer_id,
-  items: itemsPayload,
+      // ✅ 2) place order
+      const paymentObj = {
+        method: orderDetails?.paymentMethod === "online" ? "Online" : "Cash",
+        transaction_id: "TX-" + Date.now()
+      }
 
-  // ✅ THIS is the real dynamic final amount (CENTS)
-  total: orderDetails.total,
+      const orderRes = await api.post("/api/method/ultipos.api.order.place", {
+        outlet_code: currentStore,
+        customer_id: customer_id,
 
-  payment: {
-    method: orderDetails.paymentMethod === "online" ? "Online" : "Cash",
-    transaction_id: "TX-" + Date.now()
-  }
-})
+        // ✅ MUST stringify because backend uses _loads()
+        items: JSON.stringify(itemsPayload),
+        payment: JSON.stringify(paymentObj),
 
+        coupon_code: orderDetails?.coupon?.code || null,
+        order_type: orderDetails?.orderType || "Delivery",
+        notes: orderDetails?.notes || null
+      })
 
       const orderData = orderRes?.data?.message
       console.log("ORDER PLACE RESPONSE:", orderData)
 
       if (!orderData?.order_id) {
-        toast.error("Order failed. order_id missing.")
+        toast.error("Order failed: order_id missing")
         return
       }
 
-      // ✅ ONLINE → redirect to payment page
-      if (orderDetails.paymentMethod === "online") {
-        if (orderData?.payment_url) {
-          window.location.assign(orderData.payment_url)
-          return
-        }
-        toast.error("payment_url missing")
-        return
-      }
+      // ✅ online payment: create intent -> redirect
+      // if (orderDetails?.paymentMethod === "online") {
+      //   const payRes = await api.post("/api/method/ultipos.api.payment.create_intent", {
+      //     outlet_code: currentStore,
+      //     amount: toNumber(orderDetails?.total ?? getCartTotal()),
+      //     order_id: orderData.order_id,
+      //     customer: JSON.stringify(customerObj)
+      //   })
 
-      // ✅ CASH → directly go to status
+      //   const redirect_url = payRes?.data?.message?.redirect_url
+
+      //   if (!redirect_url) {
+      //     toast.error("Payment redirect_url missing")
+      //     return
+      //   }
+
+      //   window.location.assign(redirect_url)
+      //   return
+      // }
+      if (orderDetails?.paymentMethod === "online") {
+  window.location.assign(
+    `/worldline-pay?amount=${toNumber(orderDetails?.total ?? getCartTotal())}&order_id=${orderData.order_id}`
+  )
+  return
+}
+
+
+      // ✅ cash -> status page
       navigate(`/order-status/${orderData.order_id}`)
     } catch (err) {
       console.error(err)
-      toast.error(err?.response?.data?.message || "Checkout failed")
+      toast.error(err?.response?.data?.message || err?.message || "Checkout failed")
     } finally {
       setIsPlacingOrder(false)
     }

@@ -1,26 +1,23 @@
 "use client"
 import { useEffect, useMemo, useState } from "react"
-import { X, Plus, Minus, Star, Clock, Users } from "lucide-react"
+import { X, Plus, Minus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "react-hot-toast"
 import { formatPriceAUD } from "../utils/currency"
 
 export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
-  // ✅ SAFE FALLBACK
   const safeItem = item || {}
 
   const [quantity, setQuantity] = useState(1)
   const [selectedVariant, setSelectedVariant] = useState(null)
   const [selectedAddOns, setSelectedAddOns] = useState([])
   const [specialInstructions, setSpecialInstructions] = useState("")
-
-  // ✅ MODIFIERS STATE
   const [selectedModifiers, setSelectedModifiers] = useState({})
 
-  // ✅ modifiers always safe
+  // ✅ backend: customizations
   const modifiers = useMemo(() => {
-    return Array.isArray(safeItem.modifiers) ? safeItem.modifiers : []
-  }, [safeItem.modifiers])
+    return Array.isArray(safeItem.customizations) ? safeItem.customizations : []
+  }, [safeItem.customizations])
 
   useEffect(() => {
     if (isOpen && item) {
@@ -35,14 +32,6 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
   // -----------------------------
   // HELPERS
   // -----------------------------
-  const handleAddOnToggle = addon => {
-    setSelectedAddOns(prev =>
-      prev.find(a => a.id === addon.id)
-        ? prev.filter(a => a.id !== addon.id)
-        : [...prev, addon]
-    )
-  }
-
   const setModifierValue = (groupName, optionId, mode = "single") => {
     setSelectedModifiers(prev => {
       const next = { ...prev }
@@ -64,19 +53,20 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
     })
   }
 
-  // ✅ selected modifier objects (store full details)
+  // ✅ store selected modifier objects in cart
   const selectedModifierObjects = useMemo(() => {
     const output = []
 
     for (const mod of modifiers) {
-      const group = mod.group
+      const group = mod.group_id || mod.name
       const selected = selectedModifiers[group] || []
 
       for (const opt of mod.options || []) {
-        if (selected.includes(opt.id)) {
+        const optId = opt.option_id || opt.name
+        if (selected.includes(optId)) {
           output.push({
             group,
-            id: opt.id,
+            id: optId,
             name: opt.name,
             price: Number(opt.price ?? 0)
           })
@@ -104,8 +94,9 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
 
   const validateModifiers = () => {
     for (const mod of modifiers) {
-      const required = Number(mod.required || 0) === 1
-      const group = mod.group
+      const group = mod.group_id || mod.name
+      const required = !!mod.required
+
       const sel = selectedModifiers[group] || []
 
       if (required && sel.length === 0) {
@@ -136,8 +127,8 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
       {
         ...safeItem,
         selectedModifiers: selectedModifierObjects,
-        selectedAddOns: selectedAddOns,
-        selectedVariant: selectedVariant,
+        selectedAddOns,
+        selectedVariant,
         specialInstructions
       },
       quantity,
@@ -150,7 +141,7 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
     onClose()
   }
 
-  // ✅ NOW SAFE to return AFTER hooks
+  // ✅ safe return
   if (!isOpen || !item) return null
 
   // -----------------------------
@@ -179,11 +170,9 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
             </div>
 
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <h3 className="text-lg sm:text-2xl font-semibold">
-                  {safeItem.name}
-                </h3>
-              </div>
+              <h3 className="text-lg sm:text-2xl font-semibold mb-2">
+                {safeItem.name}
+              </h3>
 
               <p className="text-sm text-gray-600 mb-3 sm:mb-4">
                 {safeItem.description || "No description available."}
@@ -191,24 +180,32 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
             </div>
           </div>
 
-          {/* ✅ MODIFIERS */}
+          {/* ✅ MODIFIERS / CUSTOMIZATIONS */}
           {modifiers.length > 0 && (
             <div className="space-y-4">
               <h4 className="font-semibold text-sm sm:text-base">Customize</h4>
 
               {modifiers.map(mod => {
-                const group = mod.group
-                const required = Number(mod.required || 0) === 1
+                const group = mod.group_id || mod.name
+                const required = !!mod.required
                 const max = Number(mod.max ?? 0)
-                const mode = max > 1 ? "multi" : "single"
+
+                // max === 1 => radio, else checkbox
+                const mode = max === 1 ? "single" : "multi"
 
                 const selected = selectedModifiers[group] || []
 
                 return (
-                  <div key={group} className="border border-gray-200 rounded-xl p-4">
+                  <div
+                    key={group}
+                    className="border border-gray-200 rounded-xl p-4"
+                  >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <h5 className="font-bold text-sm text-gray-900">{group}</h5>
+                        <h5 className="font-bold text-sm text-gray-900">
+                          {mod.name || group}
+                        </h5>
+
                         {required && (
                           <span className="text-[10px] font-bold text-white bg-orange-500 px-2 py-0.5 rounded-full">
                             REQUIRED
@@ -217,18 +214,23 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
                       </div>
 
                       <div className="text-xs text-gray-500 font-medium">
-                        {mode === "multi" ? `Choose up to ${max}` : "Choose 1"}
+                        {mode === "multi"
+                          ? max > 0
+                            ? `Choose up to ${max}`
+                            : "Choose any"
+                          : "Choose 1"}
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       {(mod.options || []).map(opt => {
-                        const isSelected = selected.includes(opt.id)
+                        const optId = opt.option_id || opt.name
+                        const isSelected = selected.includes(optId)
                         const optPrice = Number(opt.price ?? 0)
 
                         return (
                           <label
-                            key={opt.id}
+                            key={optId}
                             className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition-all ${
                               isSelected
                                 ? "border-orange-500 bg-orange-50"
@@ -240,14 +242,20 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
                                 type={mode === "multi" ? "checkbox" : "radio"}
                                 name={group}
                                 checked={isSelected}
-                                onChange={() => setModifierValue(group, opt.id, mode)}
+                                onChange={() =>
+                                  setModifierValue(group, optId, mode)
+                                }
                                 className="text-orange-500"
                               />
-                              <span className="text-sm font-medium">{opt.name}</span>
+                              <span className="text-sm font-medium">
+                                {opt.name}
+                              </span>
                             </div>
 
                             <span className="text-sm font-bold text-gray-900">
-                              {optPrice > 0 ? `+ ${formatPriceAUD(optPrice)}` : "Free"}
+                              {optPrice > 0
+                                ? `+ ${formatPriceAUD(optPrice)}`
+                                : "Free"}
                             </span>
                           </label>
                         )
@@ -286,7 +294,9 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
                 >
                   <Minus className="w-4 h-4" />
                 </Button>
-                <span className="w-8 text-center text-sm font-medium">{quantity}</span>
+                <span className="w-8 text-center text-sm font-medium">
+                  {quantity}
+                </span>
                 <Button
                   variant="outline"
                   size="icon"
@@ -308,7 +318,6 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
         </div>
       </div>
 
-      {/* Light animations */}
       <style>{`
         @keyframes fadeInOverlay { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUpModal { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }

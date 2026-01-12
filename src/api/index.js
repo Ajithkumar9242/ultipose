@@ -1,47 +1,51 @@
-import { toast } from "react-hot-toast"
-// src/api.js
 import axios from "axios"
-const API_BASE =
-  import.meta.env.VITE_API_URL || "http://ultipos.local:8000"
+import { toast } from "react-hot-toast"
 
+// ✅ always call relative URL so Vite proxy works
 const api = axios.create({
-  baseURL: API_BASE
+  baseURL: "",
+  withCredentials: true
 })
 
+const GUEST_METHODS = [
+  "/api/method/ultipos.api.store.ping",
+  "/api/method/ultipos.api.store.get_store",
+  "/api/method/ultipos.api.store.get_stores",
+  "/api/method/ultipos.api.menu.get_menu",
+  "/api/method/ultipos.api.coupon.get_active",
+  "/api/method/ultipos.api.coupon.validate_coupon",
+  "/api/method/ultipos.api.checkout.create_or_update",
+  "/api/method/ultipos.api.order.place",
+  "/api/method/ultipos.api.order.get_status"
+]
 
-// ✅ OPTIONAL: add a request interceptor (for auth token etc.)
 api.interceptors.request.use(
-  config => {
-    // Example: attach token if exists
-    const token = localStorage.getItem("token")
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+  (config) => {
+    const isGuest = GUEST_METHODS.some((p) => config.url?.includes(p))
+
+    if (!isGuest) {
+      const token = localStorage.getItem("token")
+      if (token) config.headers.Authorization = `Bearer ${token}`
     }
+
     return config
   },
-  error => Promise.reject(error)
+  (error) => Promise.reject(error)
 )
 
-// ✅ Response interceptor – logs errors in one place
 api.interceptors.response.use(
-  response => response,
-  error => {
-    const status = error?.response?.status
+  (res) => res,
+  (err) => {
+    console.error("API error:", err?.response?.data || err.message)
 
-    // 🔥 Check for 404 and redirect
-    if (status === 404) {
-      toast.error("Page not found — redirecting...")
-      window.location.href = "/"        // redirect to homepage
-      return
-    }
+    const msg =
+      err?.response?.data?._server_messages
+        ? JSON.parse(err.response.data._server_messages)?.[0]
+        : err?.response?.data?.message || err?.message || "Something went wrong"
 
-    // Default error handler
-    console.error("API error:", error?.response?.data || error.message)
-    toast.error(error?.response?.data?.message || "Something went wrong")
-
-    return Promise.reject(error)
+    toast.error(typeof msg === "string" ? msg : "Something went wrong")
+    return Promise.reject(err)
   }
 )
-
 
 export default api

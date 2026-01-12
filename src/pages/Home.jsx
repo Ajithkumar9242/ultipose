@@ -6,16 +6,12 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   MapPin,
   Navigation,
-  Clock,
   Star,
   Bike,
   ShoppingBag,
   X
 } from "lucide-react"
-// import restaurantData from "../data/restaurant.js"
-const OUTLET_CODE = "ultipos-main"
 import api from "@/api"
-
 
 // --- UI COMPONENTS ---
 const Button = ({
@@ -64,9 +60,9 @@ const Home = () => {
   const [manualFormVisible, setManualFormVisible] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const [store, setStore] = useState(null)
-const [loadingStore, setLoadingStore] = useState(true)
-
+  // ✅ MULTI STORE STATE
+  const [stores, setStores] = useState([])
+  const [loadingStore, setLoadingStore] = useState(true)
 
   const [manualAddress, setManualAddress] = useState({
     name: "",
@@ -79,7 +75,7 @@ const [loadingStore, setLoadingStore] = useState(true)
   const navigate = useNavigate()
 
   // preview for map / confirmation
-  const [previewCoords, setPreviewCoords] = useState(null) // { lat, lon }
+  const [previewCoords, setPreviewCoords] = useState(null)
   const [previewAddress, setPreviewAddress] = useState("")
   const [pendingUserDetails, setPendingUserDetails] = useState(null)
 
@@ -156,29 +152,31 @@ const [loadingStore, setLoadingStore] = useState(true)
         }
       },
       () => {
-        // user denied or error → manual fallback
         setLoading(false)
         setManualFormVisible(true)
       }
     )
   }
-useEffect(() => {
-  fetch(
-    "http://ultipos.local:8000/api/method/ultipos.api.store.get_store?outlet_code=ultipos-main"
-  )
-    .then(r => r.json())
-    .then(data => {
-      setStore(data.message)   // 🔥 THIS WAS MISSING
-      setLoadingStore(false)
-    })
-    .catch(err => {
-      console.error(err)
-      setLoadingStore(false)
-    })
-}, [])
 
+  // ✅ LOAD MULTIPLE STORES
+  useEffect(() => {
+    const loadStores = async () => {
+      try {
+        const res = await api.get("/api/method/ultipos.api.store.get_stores")
 
+        // backend returns: { message: { stores: [...] } }
+        const list = res?.data?.message?.stores || []
 
+        setStores(list)
+      } catch (e) {
+        console.error("Failed to load stores:", e)
+      } finally {
+        setLoadingStore(false)
+      }
+    }
+
+    loadStores()
+  }, [])
 
   // Manual address submit → geocode → set preview
   const handleManualSubmit = async e => {
@@ -235,205 +233,192 @@ useEffect(() => {
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800 relative overflow-x-hidden">
       {/* LOCATION MODAL */}
-{/* LOCATION MODAL */}
-<AnimatePresence>
-  {isLocationModalOpen && (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-    >
-      <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        // 👇 added max-h + flex-col so content can scroll
-        className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
-      >
-        {/* Header (unchanged) */}
-        <div className="bg-orange-600 p-6 text-white text-center relative shrink-0">
-          <button
-            type="button"
-            onClick={handleCloseModal}
-            className="absolute top-3 right-3 text-white/80 hover:text-white transition-colors"
+      <AnimatePresence>
+        {isLocationModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
           >
-            <X size={18} />
-          </button>
-
-          <h2 className="text-2xl font-bold">Welcome!</h2>
-          <p className="opacity-90 text-sm mt-1">
-            We need your location to show nearby restaurants.
-          </p>
-        </div>
-
-        {/* Body – now scrollable */}
-        <div className="p-6 space-y-4 overflow-y-auto flex-1">
-          {!manualFormVisible ? (
-            <div className="space-y-4">
-              <Button
-                onClick={handleAutoDetect}
-                disabled={loading}
-                className="w-full py-4 text-lg bg-gray-900 hover:bg-black text-white"
-              >
-                {loading ? (
-                  "Locating..."
-                ) : (
-                  <>
-                    <Navigation size={20} /> Use Current Location
-                  </>
-                )}
-              </Button>
-
-              <div className="relative flex py-2 items-center">
-                <div className="flex-grow border-t border-gray-200" />
-                <span className="flex-shrink-0 mx-4 text-gray-400 text-sm">
-                  OR
-                </span>
-                <div className="flex-grow border-t border-gray-200" />
-              </div>
-
-              <Button
-                variant="outline"
-                onClick={() => setManualFormVisible(true)}
-                className="w-full py-4"
-              >
-                Enter Address Manually
-              </Button>
-            </div>
-          ) : (
-            <form
-              onSubmit={handleManualSubmit}
-              className="space-y-4"
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
             >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-bold text-lg">Enter Details</h3>
+              <div className="bg-orange-600 p-6 text-white text-center relative shrink-0">
                 <button
                   type="button"
-                  onClick={() => setManualFormVisible(false)}
-                  className="text-gray-400 hover:text-black text-sm underline"
+                  onClick={handleCloseModal}
+                  className="absolute top-3 right-3 text-white/80 hover:text-white transition-colors"
                 >
-                  Back
+                  <X size={18} />
                 </button>
-              </div>
 
-              {/* Name */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-gray-500">
-                  Your Name
-                </label>
-                <Input
-                  placeholder="John Doe"
-                  required
-                  value={manualAddress.name}
-                  onChange={e =>
-                    setManualAddress(prev => ({
-                      ...prev,
-                      name: e.target.value
-                    }))
-                  }
-                />
-              </div>
-
-              {/* Street */}
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-gray-500">
-                  Street Address
-                </label>
-                <Input
-                  placeholder="123 Main St"
-                  required
-                  value={manualAddress.street}
-                  onChange={e =>
-                    setManualAddress(prev => ({
-                      ...prev,
-                      street: e.target.value
-                    }))
-                  }
-                />
-              </div>
-
-              {/* City + ZIP */}
-              <div className="flex gap-3">
-                <div className="flex-1 space-y-1">
-                  <label className="text-xs font-medium text-gray-500">
-                    City
-                  </label>
-                  <Input
-                    placeholder="Sydney"
-                    required
-                    value={manualAddress.city}
-                    onChange={e =>
-                      setManualAddress(prev => ({
-                        ...prev,
-                        city: e.target.value
-                      }))
-                    }
-                  />
-                </div>
-                <div className="w-28 space-y-1">
-                  <label className="text-xs font-medium text-gray-500">
-                    ZIP
-                  </label>
-                  <Input
-                    placeholder="2000"
-                    required
-                    value={manualAddress.zip}
-                    onChange={e =>
-                      setManualAddress(prev => ({
-                        ...prev,
-                        zip: e.target.value
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3 mt-2"
-              >
-                {loading ? "Verifying..." : "Find on map"}
-              </Button>
-            </form>
-          )}
-
-          {/* Map preview + confirm */}
-          {previewCoords && (
-            <div className="mt-1 pt-4 border-t border-gray-100 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-gray-500">
-                  Location preview
+                <h2 className="text-2xl font-bold">Welcome!</h2>
+                <p className="opacity-90 text-sm mt-1">
+                  We need your location to show nearby restaurants.
                 </p>
-                {previewAddress && (
-                  <p className="text-[11px] text-gray-400 text-right line-clamp-2">
-                    {previewAddress}
-                  </p>
+              </div>
+
+              <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                {!manualFormVisible ? (
+                  <div className="space-y-4">
+                    <Button
+                      onClick={handleAutoDetect}
+                      disabled={loading}
+                      className="w-full py-4 text-lg bg-gray-900 hover:bg-black text-white"
+                    >
+                      {loading ? (
+                        "Locating..."
+                      ) : (
+                        <>
+                          <Navigation size={20} /> Use Current Location
+                        </>
+                      )}
+                    </Button>
+
+                    <div className="relative flex py-2 items-center">
+                      <div className="flex-grow border-t border-gray-200" />
+                      <span className="flex-shrink-0 mx-4 text-gray-400 text-sm">
+                        OR
+                      </span>
+                      <div className="flex-grow border-t border-gray-200" />
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => setManualFormVisible(true)}
+                      className="w-full py-4"
+                    >
+                      Enter Address Manually
+                    </Button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleManualSubmit} className="space-y-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-bold text-lg">Enter Details</h3>
+                      <button
+                        type="button"
+                        onClick={() => setManualFormVisible(false)}
+                        className="text-gray-400 hover:text-black text-sm underline"
+                      >
+                        Back
+                      </button>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-500">
+                        Your Name
+                      </label>
+                      <Input
+                        placeholder="John Doe"
+                        required
+                        value={manualAddress.name}
+                        onChange={e =>
+                          setManualAddress(prev => ({
+                            ...prev,
+                            name: e.target.value
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-500">
+                        Street Address
+                      </label>
+                      <Input
+                        placeholder="123 Main St"
+                        required
+                        value={manualAddress.street}
+                        onChange={e =>
+                          setManualAddress(prev => ({
+                            ...prev,
+                            street: e.target.value
+                          }))
+                        }
+                      />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <div className="flex-1 space-y-1">
+                        <label className="text-xs font-medium text-gray-500">
+                          City
+                        </label>
+                        <Input
+                          placeholder="Sydney"
+                          required
+                          value={manualAddress.city}
+                          onChange={e =>
+                            setManualAddress(prev => ({
+                              ...prev,
+                              city: e.target.value
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="w-28 space-y-1">
+                        <label className="text-xs font-medium text-gray-500">
+                          ZIP
+                        </label>
+                        <Input
+                          placeholder="2000"
+                          required
+                          value={manualAddress.zip}
+                          onChange={e =>
+                            setManualAddress(prev => ({
+                              ...prev,
+                              zip: e.target.value
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full py-3 mt-2"
+                    >
+                      {loading ? "Verifying..." : "Find on map"}
+                    </Button>
+                  </form>
+                )}
+
+                {previewCoords && (
+                  <div className="mt-1 pt-4 border-t border-gray-100 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-gray-500">
+                        Location preview
+                      </p>
+                      {previewAddress && (
+                        <p className="text-[11px] text-gray-400 text-right line-clamp-2">
+                          {previewAddress}
+                        </p>
+                      )}
+                    </div>
+
+                    <LocationMapPreview coords={previewCoords} />
+
+                    <Button
+                      onClick={handleConfirmLocation}
+                      disabled={loading}
+                      className="w-full py-3"
+                    >
+                      Confirm location & continue
+                    </Button>
+                  </div>
                 )}
               </div>
-
-              <LocationMapPreview coords={previewCoords} />
-
-              <Button
-                onClick={handleConfirmLocation}
-                disabled={loading}
-                className="w-full py-3"
-              >
-                Confirm location & continue
-              </Button>
-            </div>
-          )}
-        </div>
-      </motion.div>
-    </motion.div>
-  )}
-</AnimatePresence>
-
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* HEADER */}
       <header className="sticky top-0 z-40 bg-white border-b shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          {/* Logo */}
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 bg-orange-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
               U
@@ -443,7 +428,6 @@ useEffect(() => {
             </span>
           </div>
 
-          {/* Delivery / Pickup toggle */}
           <div className="bg-gray-100 p-1 rounded-full flex items-center shadow-inner">
             <button
               onClick={() => setServiceType("delivery")}
@@ -467,7 +451,6 @@ useEffect(() => {
             </button>
           </div>
 
-          {/* Location chip – icon only on mobile, icon + text on md+ */}
           <button
             className="flex items-center gap-1 sm:gap-2 text-sm bg-orange-50 text-orange-700 px-2 sm:px-3 py-1 rounded-full cursor-pointer"
             onClick={() => setLocationModalOpen(true)}
@@ -492,37 +475,34 @@ useEffect(() => {
               Order from your favorite local restaurants.
             </p>
           </div>
-          
         </div>
       </div>
 
       {/* RESTAURANT GRID – ONLY AFTER LOCATION IS SET */}
       {hasLocation ? (
         <main className="max-w-6xl mx-auto px-4 py-8">
-         <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-  Available Restaurants
-  <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-    {store ? 1 : 0} nearby
-  </span>
-</h2>
-
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+            Available Restaurants
+            <span className="text-sm font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+              {loadingStore ? "Loading..." : `${stores.length} nearby`}
+            </span>
+          </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-{store && (
-  <RestaurantCard
-    data={{
-      name: store.restaurant.name,
-      image: store.restaurant.logo || "/placeholder.svg",
-      rating: 4.5,
-      deliveryFee: "Free",
-      categories: ["Fast Food"],
-      isOpen: store.outlet.is_open
-    }}
-    onClick={() => navigate(`/s/${store.outlet.outlet_code}`)}
-  />
-)}
-
-
+            {stores.map(store => (
+              <RestaurantCard
+                key={store.outlet_code}
+                data={{
+                  name: store.name,
+                  image: "/placeholder.svg",
+                  rating: 4.5,
+                  deliveryFee: "Free",
+                  categories: ["Fast Food"],
+                  isOpen: store.is_open
+                }}
+                onClick={() => navigate(`/s/${store.outlet_code}`)}
+              />
+            ))}
           </div>
         </main>
       ) : (
@@ -593,7 +573,6 @@ const RestaurantCard = ({ data, onClick }) => (
           </span>
         </div>
       )}
-     
     </div>
 
     <div className="p-4">

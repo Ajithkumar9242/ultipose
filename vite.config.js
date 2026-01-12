@@ -9,14 +9,15 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  server: {
-    proxy: {
-      // any request starting with /pos-api will be proxied
-      "/pos-api": {
-        target: "http://ultipos.local:8000",
-        changeOrigin: true,
-        secure: false
-      }
+server: {
+  proxy: {
+    "/api": {
+      target: "http://ultipos.localhost:8000",
+      changeOrigin: true,
+      secure: false,
     }
-  },
+  }
+}
+
+,
 })

@@ -1,76 +1,89 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
-import { useSearchParams, useNavigate } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { CreditCard } from "lucide-react"
+import api from "@/api"
+import { toast } from "react-hot-toast"
 
 export default function FakeWorldline() {
-  const [q] = useSearchParams()
+  const [params] = useSearchParams()
   const navigate = useNavigate()
 
-  const orderId = q.get("orderId")
-  const amount = q.get("amount") // ✅ expected in cents, ex: 120 = $1.20
+  const amount = params.get("amount")
+  const orderId = params.get("order_id")
 
-  // ✅ Convert cents -> dollars (or just show as 0.00 if missing)
-  const { amountCents, amountDisplay } = useMemo(() => {
-    const cents = Number(amount || 0)
-    const safeCents = Number.isFinite(cents) ? cents : 0
-    return {
-      amountCents: safeCents,
-      amountDisplay: (safeCents / 100).toFixed(2)
-    }
-  }, [amount])
+  const [seconds, setSeconds] = useState(5)
+  const [paying, setPaying] = useState(false)
 
   useEffect(() => {
-    if (!orderId) {
-      navigate("/")
-    }
-  }, [orderId, navigate])
+    const t = setInterval(() => setSeconds(s => s - 1), 1000)
+    return () => clearInterval(t)
+  }, [])
 
-  if (!orderId) return null
+  useEffect(() => {
+    if (seconds <= 0) {
+      if (orderId) navigate(`/order-status/${orderId}`)
+      else navigate("/")
+    }
+  }, [seconds, orderId, navigate])
+
+  const handlePayNow = async () => {
+    if (!orderId) {
+      toast.error("Missing order id")
+      return navigate("/")
+    }
+
+    try {
+      setPaying(true)
+
+      // ✅ mark paid in backend
+      await api.post("/api/method/ultipos.api.payment_status.mark_paid", {
+        order_id: orderId
+      })
+
+      toast.success("Payment successful ✅")
+      navigate(`/order-status/${orderId}`)
+    } catch (err) {
+      console.error(err)
+      toast.error(err?.response?.data?.message || "Payment failed")
+    } finally {
+      setPaying(false)
+    }
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow p-6 space-y-4 border">
-        <div className="flex items-center gap-2 font-bold text-lg">
-          <CreditCard className="w-5 h-5 text-orange-500" />
-          Worldline Secure Payment (DEMO) ✅
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 text-center">
+        <h1 className="text-xl font-bold mb-2">Worldline Payment (Mock)</h1>
 
-        <div className="space-y-1">
-          <p className="text-sm text-gray-600">
-            Order: <b>{orderId}</b>
-          </p>
+        <p className="text-gray-600 text-sm mb-3">
+          Amount: <b>{amount}</b>
+        </p>
 
-          <p className="text-sm text-gray-600">
-            Amount:{" "}
-            <b className="text-gray-900">
-              ${amountDisplay}
-            </b>{" "}
-            <span className="text-xs text-gray-400">(cents: {amountCents})</span>
-          </p>
-        </div>
+        <p className="text-gray-600 text-sm mb-5">
+          Order ID: <b>{orderId || "missing"}</b>
+        </p>
 
-        <div className="pt-2 space-y-2">
-          <Button
-            className="w-full bg-green-600 hover:bg-green-700 text-white"
-            onClick={() => navigate(`/payment-return?orderId=${orderId}`)}
-          >
-            Pay Now ✅
-          </Button>
+        <Button
+          className="bg-green-600 hover:bg-green-700 text-white w-full"
+          onClick={handlePayNow}
+          disabled={paying}
+        >
+          {paying ? "Processing..." : "Pay Now (Success)"}
+        </Button>
 
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => navigate(`/payment-return?orderId=${orderId}&failed=1`)}
-          >
-            Cancel ❌
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          className="w-full mt-3"
+          onClick={() => navigate("/")}
+          disabled={paying}
+        >
+          Cancel Payment
+        </Button>
 
-        <p className="text-[11px] text-gray-400 pt-2 text-center">
-          DEMO payment gateway screen only.
+        <p className="text-xs text-gray-500 mt-4">
+          Auto redirect in {seconds}s...
         </p>
       </div>
     </div>
