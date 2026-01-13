@@ -6,50 +6,54 @@ import Cart from "./pages/Cart"
 import Checkout from "./pages/Checkout"
 import NotFound from "./pages/NotFound"
 
-
-// ⬇️ NEW imports
+// NEW imports
 import PaymentReturn from "./pages/PaymentReturn"
 import OrderStatusPage from "./pages/OrderStatus"
 import FakeWorldline from "./pages/FakeWorldline"
 import Payment from "./pages/Payment"
+import WorldlinePay from "./pages/Worldlinepay"
 
 function App() {
   return (
-    <>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/menu" element={<Menuu />} />
-        <Route path="/s/:storeCode" element={<Menuu />} />
+    <Routes>
+      {/* Home */}
+      <Route path="/" element={<Home />} />
 
+      {/* ✅ IMPORTANT: REMOVE /menu or redirect */}
+      <Route path="/menu" element={<Navigate to="/" replace />} />
 
-        {/* ⬇️ NEW ROUTES */}
-        <Route path="/payment-return" element={<PaymentReturn />} />
-        <Route path="/order-status/:orderId" element={<OrderStatusPage />} />
-<Route path="/track/:orderId" element={<OrderStatusPage />} />
+      {/* ✅ Real menu route */}
+      <Route path="/s/:storeCode" element={<Menuu />} />
 
+      {/* Redirect /store/:storeCode → /s/:storeCode */}
+      <Route
+        path="/store/:storeCode"
+        element={
+          <Navigate
+            to={location => {
+              const storeCode = location.pathname.split("/").pop()
+              return `/s/${storeCode}`
+            }}
+            replace
+          />
+        }
+      />
 
-        {/* Redirect /store/:storeCode → /s/:storeCode */}
-        <Route
-          path="/store/:storeCode"
-          element={
-            <Navigate
-              to={location => {
-                const storeCode = location.pathname.split("/").pop()
-                return `/s/${storeCode}`
-              }}
-              replace
-            />
-          }
-        />
+      {/* Routes */}
+      <Route path="/payment-return" element={<PaymentReturn />} />
+      <Route path="/order-status/:orderId" element={<OrderStatusPage />} />
+      <Route path="/track/:orderId" element={<OrderStatusPage />} />
 
-        <Route path="/payment" element={<Payment />} />
+      <Route path="/payment" element={<Payment />} />
+      <Route path="/worldline-pay" element={<FakeWorldline />} />
 
-<Route path="/worldline-pay" element={<FakeWorldline />} />
-        <Route path="/checkout" element={<Checkout />} />
-        <Route path="/cart" element={<Cart />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </>
+      <Route path="/checkout" element={<Checkout />} />
+      <Route path="/cart" element={<Cart />} />
+<Route path="/worldline-pay" element={<WorldlinePay />} />
+
+      {/* Not Found */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   )
 }
 

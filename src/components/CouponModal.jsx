@@ -54,15 +54,34 @@ const fetchCoupons = async () => {
 
     const coupons = res?.data?.message || []
 
-    const mapped = coupons.map(c => ({
-      code: c.coupon_code,
-      title: c.coupon_code,
-      description: "",
-      type: c.discount_type === "Percentage" ? "percentage" : "fixed",
-      discount: Number(c.discount_value || 0),
-      minOrder: Number(c.min_order_amount || 0),
-      maxDiscount: c.max_discount ? Number(c.max_discount) : null
-    }))
+    const mapped = coupons.map(c => {
+      const discountType =
+        c.discount_type === "Percentage" ? "percentage" : "fixed"
+
+      const discountValue = Number(c.discount_value || 0)
+
+      // ✅ convert backend amounts -> cents
+      const minOrderCents = Math.round(Number(c.min_order_amount || 0) * 100)
+      const maxDiscountCents = c.max_discount
+        ? Math.round(Number(c.max_discount) * 100)
+        : null
+
+      return {
+        code: String(c.coupon_code || "").toUpperCase(),
+       title: c.coupon_code || "Offer",
+description: "",
+
+        type: discountType,
+
+        discount:
+          discountType === "fixed"
+            ? Math.round(discountValue * 100) // ✅ fixed discount in cents
+            : discountValue, // ✅ percentage in %
+
+        minOrder: minOrderCents,
+        maxDiscount: maxDiscountCents
+      }
+    })
 
     if (!cancelled) {
       setAvailableCoupons(mapped)
@@ -77,6 +96,7 @@ const fetchCoupons = async () => {
     if (!cancelled) setLoading(false)
   }
 }
+
 
 
     fetchCoupons()

@@ -54,13 +54,19 @@ function mapBackendStatusToUiKey(status) {
   }
 }
 
-// ✅ NO conversion - direct AUD formatter
+// ✅ AUD formatter (expects DOLLARS)
 function formatAUD(value) {
   const n = Number(value)
   return new Intl.NumberFormat("en-AU", {
     style: "currency",
     currency: "AUD"
   }).format(Number.isFinite(n) ? n : 0)
+}
+
+// ✅ helper: cents -> dollars
+function centsToDollars(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? n / 100 : 0
 }
 
 export default function OrderStatusPage() {
@@ -91,7 +97,10 @@ export default function OrderStatusPage() {
       setOrder(payload)
 
       const storeCode =
-        payload.storeCode || payload.store_code || payload.outlet_code || payload.outlet
+        payload.storeCode ||
+        payload.store_code ||
+        payload.outlet_code ||
+        payload.outlet
 
       if (storeCode) dispatch(clearCartForStore(storeCode))
     } catch (err) {
@@ -177,25 +186,34 @@ export default function OrderStatusPage() {
 
   const customer = order.customer || {}
 
-  // ✅ ITEMS: backend sends items list
+  // ✅ ITEMS list
   const items = Array.isArray(order.items) ? order.items : []
 
-  // ✅ AMOUNT: take from backend directly
-  const paidAmount =
-   1.50
+  // ✅ AMOUNT from backend (CENTs)
+  const rawAmountCents =
+    Number(order?.grand_total ?? order?.amount ?? order?.total_amount ?? 0) || 0
+
+  // ✅ converted to dollars
+  const paidAmount = centsToDollars(rawAmountCents)
 
   // ✅ Invoice Preview
   const handlePreviewInvoice = () => {
     const dateStr = new Date(order.createdAt || Date.now()).toLocaleString()
 
-    const popup = window.open("", "ReceiptPreview", "width=420,height=700,scrollbars=yes")
+    const popup = window.open(
+      "",
+      "ReceiptPreview",
+      "width=420,height=700,scrollbars=yes"
+    )
     if (!popup) return
 
     const itemsHtml = items
-      .map(item => {
+      .map((item) => {
         const qty = Number(item.qty ?? item.quantity ?? 1) || 1
-        const unit = Number(item.unit_price ?? item.price ?? 0) || 0
-        const line = Number(item.total_price ?? unit * qty) || 0
+
+        // ✅ unit/line in CENTS -> convert to DOLLARS
+        const unit = centsToDollars(item.unit_price ?? item.price ?? 0)
+        const line = centsToDollars(item.total_price ?? unit * qty * 100)
 
         return `
           <div class="item-row">
@@ -221,10 +239,10 @@ export default function OrderStatusPage() {
             .divider { border-top:2px dashed #000; opacity:0.2; margin:14px 0; }
             .item-row { display:flex; justify-content:space-between; font-size:13px; margin-bottom:10px; }
             .qty { width:40px; font-weight:bold; }
-            .name { flex:1; }
+            .name { flex:1; padding-right:10px; }
             .price { font-weight:bold; white-space:nowrap; }
             .final { font-size:16px; font-weight:bold; margin-top:10px; border-top:2px solid #000; padding-top:10px; display:flex; justify-content:space-between; }
-            .action { text-align:center; margin-top:16px; }
+            .action { text-align:center; margin-top:16px; display:flex; gap:10px; justify-content:center; }
             button { padding:10px 16px; border:none; border-radius:8px; cursor:pointer; }
           </style>
         </head>
@@ -263,7 +281,9 @@ export default function OrderStatusPage() {
             <Button
               variant="outline"
               size="icon"
-              onClick={() => (storeCode ? navigate(`/s/${storeCode}`) : navigate("/"))}
+              onClick={() =>
+                storeCode ? navigate(`/s/${storeCode}`) : navigate("/")
+              }
               className="rounded-full border-white/40 bg-white/10 text-white"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -275,7 +295,11 @@ export default function OrderStatusPage() {
               </div>
               <div>
                 <p className="text-xs font-semibold text-white/80">
-                  {isCancelled ? "Order update" : isAwaiting ? "Payment pending" : "Order successful"}
+                  {isCancelled
+                    ? "Order update"
+                    : isAwaiting
+                    ? "Payment pending"
+                    : "Order successful"}
                 </p>
                 <h1 className="text-lg font-bold">Order #{orderId}</h1>
                 <p className="text-xs">{storeName}</p>
@@ -283,7 +307,11 @@ export default function OrderStatusPage() {
             </div>
           </div>
 
-          <span className={"px-3 py-1 rounded-full text-xs font-bold " + statusBadgeClass}>
+          <span
+            className={
+              "px-3 py-1 rounded-full text-xs font-bold " + statusBadgeClass
+            }
+          >
             {status}
           </span>
         </div>
@@ -291,17 +319,19 @@ export default function OrderStatusPage() {
 
       {/* BODY */}
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        {/* ✅ amount dynamic (no conversion) */}
+        {/* Total */}
         <div className="bg-white rounded-2xl shadow-sm border p-6 flex justify-between">
           <div>
-            <p className="text-xs font-bold text-gray-400 uppercase">Total Paid</p>
+            <p className="text-xs font-bold text-gray-400 uppercase">
+              Total Paid
+            </p>
             <p className="text-3xl font-bold text-gray-900">
               {formatAUD(paidAmount)}
             </p>
           </div>
         </div>
 
-        {/* ✅ items dynamic */}
+        {/* Items */}
         <div className="bg-white rounded-2xl shadow-sm border p-6">
           <div className="flex items-center gap-2 mb-4">
             <ShoppingBag className="w-5 h-5 text-orange-500" />
@@ -309,20 +339,21 @@ export default function OrderStatusPage() {
           </div>
 
           {items.length === 0 ? (
-            <p className="text-sm text-gray-500">No items found for this order.</p>
+            <p className="text-sm text-gray-500">
+              No items found for this order.
+            </p>
           ) : (
             <div className="space-y-3">
               {items.map((it, idx) => {
                 const qty = Number(it.qty ?? it.quantity ?? 1) || 1
-                // const unit = Number(it.unit_price ?? it.price ?? 0) || 0
-                const line = Number(it.total_price ?? unit * qty) || 0
+                const line = centsToDollars(it.total_price ?? 0)
 
                 return (
                   <div key={idx} className="flex justify-between text-sm">
                     <span className="text-gray-700">
                       {qty}x {it.name || it.item_name || "Item"}
                     </span>
-                    {/* <span className="font-bold">{formatAUD(line)}</span> */}
+                    <span className="font-bold">{formatAUD(line)}</span>
                   </div>
                 )
               })}
@@ -330,7 +361,7 @@ export default function OrderStatusPage() {
           )}
         </div>
 
-        {/* keep rest same */}
+        {/* Details */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white rounded-2xl shadow-sm border p-6 space-y-3">
             <div className="flex items-center gap-2">
@@ -362,11 +393,9 @@ export default function OrderStatusPage() {
           </div>
         </div>
 
+        {/* Buttons */}
         <div className="flex gap-3 justify-end">
-          <Button
-            variant="outline"
-            onClick={() => (storeCode ? navigate(`/s/${storeCode}`) : navigate("/"))}
-          >
+          <Button variant="outline" onClick={() => navigate("/")}>
             Continue shopping
           </Button>
 

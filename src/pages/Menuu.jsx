@@ -29,16 +29,16 @@ import { setUserDetails as setUserDetailsRedux } from "../redux/userSlice"
 import { formatPriceAUD } from "../utils/currency"
 import { ShoppingBag, Plus } from "lucide-react"
 
-// ✅ Default outlet
-const DEFAULT_OUTLET_CODE = "ultipos-main"
-
 export default function Menuu() {
   const { storeCode } = useParams()
-  const outletCode = storeCode || DEFAULT_OUTLET_CODE
+  const outletCode = storeCode // ✅ no fallback
 
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const listRef = useRef(null)
+
+  // ✅ if route param missing
+  if (!outletCode) return <NotFound />
 
   // -------------------- STATE --------------------
   const [foodItems, setFoodItems] = useState([])
@@ -46,7 +46,6 @@ export default function Menuu() {
   const [selectedCategory, setSelectedCategory] = useState("Menu")
   const [vegOnly, setVegOnly] = useState(false)
 
-  // ✅ IMPORTANT: keep full filters object shape
   const [filters, setFilters] = useState({
     category: "",
     isVeg: null,
@@ -55,6 +54,7 @@ export default function Menuu() {
     searchQuery: ""
   })
 
+  const [storeInfo, setStoreInfo] = useState(null) // ✅ store meta
   const [loading, setLoading] = useState(true)
   const [storeNotFound, setStoreNotFound] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
@@ -85,9 +85,13 @@ export default function Menuu() {
         setLoading(true)
         setStoreNotFound(false)
 
+        console.log("✅ Loading Menu for outlet:", outletCode)
+
         const res = await api.get("/api/method/ultipos.api.menu.get_menu", {
           params: { outlet_code: outletCode }
         })
+
+        console.log("✅ MENU API RESPONSE:", res?.data)
 
         const data = res?.data?.message
 
@@ -95,6 +99,12 @@ export default function Menuu() {
           setStoreNotFound(true)
           return
         }
+
+        // ✅ store meta: use backend outlet_code etc
+        setStoreInfo({
+          name: outletCode,
+          code: outletCode
+        })
 
         // ✅ flatten items from API
         const items = (data.categories || []).flatMap(cat =>
@@ -110,16 +120,12 @@ export default function Menuu() {
               image: i.image || "",
               description: i.description || "",
 
-              // ✅ category should be category_name (for sidebar)
               category: cat.category_name || cat.category_id || "Menu",
 
-              // ✅ backend returns customizations
               customizations,
-
-              // ✅ IMPORTANT
               customizable: customizations.length > 0,
 
-              // optional safe extras
+              // safe extras
               isVeg: i.isVeg ?? true,
               variants: i.variants || [],
               addOns: i.addOns || [],
@@ -134,12 +140,14 @@ export default function Menuu() {
         // ✅ sidebar categories
         const categoryNames = [
           "Menu",
-          ...data.categories.map(c => c.category_name).filter(Boolean)
+          ...(data.categories || [])
+            .map(c => c.category_name)
+            .filter(Boolean)
         ]
 
         setMenuCategories([...new Set(categoryNames)])
       } catch (err) {
-        console.error(err)
+        console.error("❌ MENU API ERROR:", err?.response?.data || err.message)
         toast.error("Failed to load menu")
         setStoreNotFound(true)
       } finally {
@@ -232,7 +240,6 @@ export default function Menuu() {
     navigate("/checkout")
   }
 
-  // ✅ CALLED FROM MODAL (this is important)
   const handleAddToCart = (
     item,
     quantity = 1,
@@ -260,6 +267,7 @@ export default function Menuu() {
   return (
     <div className="min-h-screen bg-orange-50">
       <MenuTopBar
+        storeInfo={storeInfo} // ✅ pass store meta to topbar
         filters={filters}
         setFilters={setFilters}
         vegOnly={vegOnly}
@@ -267,6 +275,7 @@ export default function Menuu() {
         menuCategories={menuCategories}
         selectedCategory={selectedCategory}
         setSelectedCategory={setSelectedCategory}
+        categories={menuCategories} // ✅ this prop required by FilterPanel
         cartItemsCount={getCartItemsCount()}
         onOpenCart={() => dispatch(setIsOpen(true))}
       />

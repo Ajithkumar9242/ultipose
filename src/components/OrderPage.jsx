@@ -24,11 +24,12 @@ import { toast } from "react-hot-toast"
 
 export function OrderPage({
   cartItems,
-  userDetails, // ✅ store-specific user
+  userDetails,
   onBack,
   onPlaceOrder,
+  onPlaceOrderCOD,
   total,
-  placingOrder = false // 🔥 NEW: from Checkout
+  placingOrder = false
 }) {
   const [appliedCoupon, setAppliedCoupon] = useState(null)
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false)
@@ -48,7 +49,7 @@ export function OrderPage({
   const [hasAutoOpenedAddressModal, setHasAutoOpenedAddressModal] =
     useState(false)
 
-  // 🔥 get currentStore + location FOR THAT STORE
+  // 🔥 currentStore
   const currentStore = useSelector((state) => state.cart.currentStore)
 
   const locationForStore = useSelector((state) => {
@@ -59,7 +60,6 @@ export function OrderPage({
       : { type: "delivery", data: "" }
   })
 
-  // ✅ per-store user
   const effectiveUser = userDetails || {}
 
   // ⬇️ AUTO-OPEN ADDRESS POPUP ONCE IF NO LOCATION FOR THIS STORE
@@ -73,12 +73,11 @@ export function OrderPage({
   // Local copy of cart items
   const [items, setItems] = useState(cartItems)
 
-  // Keep local items synced when cart changes
   useEffect(() => {
     setItems(cartItems || [])
   }, [cartItems])
 
-  // Notes per item
+  // Notes per cartKey (NOT item.id)
   const [noteDrafts, setNoteDrafts] = useState(() => {
     try {
       const saved = localStorage.getItem("itemNotes")
@@ -87,31 +86,35 @@ export function OrderPage({
       return {}
     }
   })
-  const [editingNoteId, setEditingNoteId] = useState(null)
 
-  // 🔹 quantity sync
-  const handleUpdateQuantity = (itemId, newQuantity) => {
+  const [editingNoteKey, setEditingNoteKey] = useState(null)
+
+  // ✅ FIXED: quantity sync using cartKey
+  const handleUpdateQuantity = (cartKey, newQuantity) => {
+    if (!cartKey) return
+
     if (newQuantity < 1) {
-      setItems((prevItems) => prevItems.filter((item) => item.id !== itemId))
-      dispatch(removeItem(itemId))
+      setItems((prev) => prev.filter((item) => item.cartKey !== cartKey))
+      dispatch(removeItem(cartKey))
       return
     }
 
-    setItems((prevItems) =>
-      prevItems.map((item) =>
-        item.id === itemId ? { ...item, quantity: newQuantity } : item
+    setItems((prev) =>
+      prev.map((item) =>
+        item.cartKey === cartKey ? { ...item, quantity: newQuantity } : item
       )
     )
 
-    dispatch(updateQuantity({ id: itemId, quantity: newQuantity }))
+    dispatch(updateQuantity({ cartKey, quantity: newQuantity }))
   }
 
-  const handleRemoveItem = (itemId) => {
-    setItems((prevItems) => prevItems.filter((item) => item.id !== itemId))
-    dispatch(removeItem(itemId))
+  const handleRemoveItem = (cartKey) => {
+    if (!cartKey) return
+    setItems((prev) => prev.filter((item) => item.cartKey !== cartKey))
+    dispatch(removeItem(cartKey))
   }
 
-  // ✅ IMPORTANT: computedTotal must be in CENTS
+  // ✅ computedTotal in CENTS
   const computedTotal = items.reduce((sum, item) => {
     const base = toCents(item.selectedVariant?.price || item.price || 0)
 
@@ -128,34 +131,18 @@ export function OrderPage({
     return sum + (base + addOns + mods) * (item.quantity || 1)
   }, 0)
 
-  // 🔹 Right now backend owns the real tax calculation (single `tax` field).
-  // On checkout UI we just show item total & discount; final tax comes from API.
-  const tax = 0
-
   const handleApplyCoupon = (coupon) => {
     if (!coupon) return
-
-    // ✅ cents check ($10 = 1000 cents)
-    if (computedTotal <= 1000) {
-      toast.error("Coupon valid only above $10")
-      return
-    }
-
     setAppliedCoupon(coupon)
     setIsCouponModalOpen(false)
   }
 
-  // 🔹 Reusable discount calculator for any coupon object
   const calculateDiscount = (coupon) => {
     if (!coupon) return 0
-
-    // 🚫 MAIN RULE: if cart total is $10 or below (1000 cents), NO discount
-    if (computedTotal <= 1000) return 0
 
     let rawDiscount = 0
 
     if (coupon.type === "fixed") {
-      // fixed discount should also be cents (eg 200 = $2.00)
       rawDiscount = toCents(coupon.discount || 0)
     } else {
       const percent = Number(coupon.discount || 0)
@@ -170,14 +157,10 @@ export function OrderPage({
   }
 
   const discount = calculateDiscount(appliedCoupon)
-
-  // clamp at 0 so we never show negative amounts
   const finalTotal = Math.max(0, computedTotal - discount)
 
-  // 🔹 Address handlers
-  const handleAddAddress = (address) => {
-    setAddresses((prev) => [...prev, address])
-  }
+  // Address handlers
+  const handleAddAddress = (address) => setAddresses((prev) => [...prev, address])
 
   const handleUpdateAddress = (updatedAddress) => {
     setAddresses((prev) =>
@@ -191,7 +174,6 @@ export function OrderPage({
 
   const handleDeleteAddress = (addressId) => {
     setAddresses((prev) => prev.filter((addr) => addr.id !== addressId))
-
     if (selectedAddress && selectedAddress.id === addressId) {
       setSelectedAddress(null)
     }
@@ -200,7 +182,6 @@ export function OrderPage({
   const handleSelectAddress = (address) => {
     setSelectedAddress(address)
 
-    // keep Redux location in sync PER STORE
     if (currentStore) {
       dispatch(
         setLocation({
@@ -249,6 +230,40 @@ export function OrderPage({
     )
   }
 
+  const startEditingNote = (item) => {
+    const key = item.cartKey
+    if (!key) return
+    setEditingNoteKey(key)
+    setNoteDrafts((prev) => ({
+      ...prev,
+      [key]: prev[key] ?? item.specialInstructions ?? ""
+    }))
+  }
+
+  const saveNoteForItem = (cartKey) => {
+    const text = (noteDrafts[cartKey] || "").trim()
+
+    setItems((prev) =>
+      prev.map((it) =>
+        it.cartKey === cartKey ? { ...it, specialInstructions: text } : it
+      )
+    )
+
+    const next = { ...noteDrafts, [cartKey]: text }
+    localStorage.setItem("itemNotes", JSON.stringify(next))
+    setNoteDrafts(next)
+    setEditingNoteKey(null)
+  }
+
+  const cancelNoteForItem = (cartKey) => {
+    setEditingNoteKey(null)
+    setNoteDrafts((prev) => {
+      const copy = { ...prev }
+      delete copy[cartKey]
+      return copy
+    })
+  }
+
   const handlePlaceOrderInternal = async () => {
     const effectiveAppliedCoupon = discount > 0 ? appliedCoupon : null
 
@@ -259,7 +274,6 @@ export function OrderPage({
       deliveryAddress:
         locationForStore.data || selectedAddress?.address || "No address",
 
-      // ✅ all cents
       subtotal: computedTotal,
       tax: 0,
       discount,
@@ -270,45 +284,33 @@ export function OrderPage({
       estimatedDelivery: "45-50 mins"
     }
 
-    await onPlaceOrder(orderDetails) // ✅ ONLY ONCE
+    await onPlaceOrder(orderDetails)
 
     setNoteDrafts({})
     localStorage.removeItem("itemNotes")
   }
 
-  const startEditingNote = (item) => {
-    setEditingNoteId(item.id)
-    setNoteDrafts((prev) => ({
-      ...prev,
-      [item.id]: prev[item.id] ?? item.specialInstructions ?? ""
-    }))
-  }
+  const handlePlaceOrderCODInternal = async () => {
+    const effectiveAppliedCoupon = discount > 0 ? appliedCoupon : null
 
-  const saveNoteForItem = (itemId) => {
-    const text = (noteDrafts[itemId] || "").trim()
+    const orderDetails = {
+      items,
+      userDetails: effectiveUser,
+      paymentMethod: "cod",
+      deliveryAddress:
+        locationForStore.data || selectedAddress?.address || "No address",
 
-    setItems((prev) =>
-      prev.map((it) =>
-        it.id === itemId ? { ...it, specialInstructions: text } : it
-      )
-    )
+      subtotal: computedTotal,
+      tax: 0,
+      discount,
+      total: finalTotal,
 
-    const nextNotes = {
-      ...noteDrafts,
-      [itemId]: text
+      appliedCoupon: effectiveAppliedCoupon,
+      orderId: `MF${Date.now()}`,
+      estimatedDelivery: "45-50 mins"
     }
-    localStorage.setItem("itemNotes", JSON.stringify(nextNotes))
-    setNoteDrafts(nextNotes)
-    setEditingNoteId(null)
-  }
 
-  const cancelNoteForItem = (itemId) => {
-    setEditingNoteId(null)
-    setNoteDrafts((prev) => {
-      const copy = { ...prev }
-      delete copy[itemId]
-      return copy
-    })
+    await onPlaceOrderCOD(orderDetails)
   }
 
   useEffect(() => {
@@ -320,7 +322,7 @@ export function OrderPage({
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans selection:bg-orange-100 selection:text-orange-600">
-      {/* 🔹 Modern Glassmorphism Header */}
+      {/* Header */}
       <div className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-20">
         <div className="flex items-center gap-4 p-4 max-w-7xl mx-auto">
           <Button
@@ -345,9 +347,9 @@ export function OrderPage({
 
       <div className="max-w-7xl mx-auto p-4 lg:p-8 animate-in fade-in duration-500">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Order Details */}
+          {/* Left */}
           <div className="lg:col-span-2 space-y-6">
-            {/* 🔹 Delivery Details Card */}
+            {/* Delivery Details */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-300">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
@@ -410,7 +412,7 @@ export function OrderPage({
               </div>
             </div>
 
-            {/* 🔹 Items in Cart */}
+            {/* Items */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
               <h2 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
                 <ShoppingBag className="w-5 h-5 text-orange-500" />
@@ -419,7 +421,6 @@ export function OrderPage({
 
               <div className="space-y-8">
                 {items.map((item) => {
-                  // ✅ all cents here
                   const basePrice = toCents(
                     item.selectedVariant?.price || item.price || 0
                   )
@@ -438,11 +439,11 @@ export function OrderPage({
                     (basePrice + addOnsPrice + modsPrice) *
                     (item.quantity || 1)
 
-                  const draftValue =
-                    noteDrafts[item.id] ?? item.specialInstructions ?? ""
+                  const noteKey = item.cartKey
+                  const draftValue = noteDrafts[noteKey] ?? item.specialInstructions ?? ""
 
                   return (
-                    <div key={item.id} className="group">
+                    <div key={item.cartKey} className="group">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-4 flex-1">
                           <div
@@ -479,30 +480,40 @@ export function OrderPage({
                                     {item.selectedAddOns.map((a) => a.name).join(", ")}
                                   </p>
                                 )}
+
+                              {(item.selectedModifiers || []).length > 0 && (
+                                <p className="text-xs text-gray-400">
+                                  <span className="font-semibold text-gray-500">
+                                    Custom:
+                                  </span>{" "}
+                                  {(item.selectedModifiers || [])
+                                    .map((m) => `${m.group}: ${m.name}`)
+                                    .join(", ")}
+                                </p>
+                              )}
                             </div>
 
                             {/* Saved Note Display */}
                             {item.specialInstructions &&
-                              editingNoteId !== item.id && (
+                              editingNoteKey !== item.cartKey && (
                                 <div className="mt-2 text-xs bg-orange-50 text-orange-700 px-3 py-1.5 rounded-lg inline-block border border-orange-100">
                                   <span className="font-bold">Note:</span>{" "}
                                   {item.specialInstructions}
                                 </div>
                               )}
 
-                            {/* ✅ Price always in cents */}
                             <div className="mt-2 text-base font-bold text-gray-900">
                               {formatPriceAUD(itemTotal)}
                             </div>
                           </div>
                         </div>
 
-                        {/* Quantity Controls */}
+                        {/* Quantity */}
                         <div className="flex flex-col items-end gap-3">
                           <div className="flex items-center bg-gray-100 rounded-full p-1 shadow-inner">
                             <button
                               onClick={() =>
-                                handleUpdateQuantity(item.id, item.quantity - 1)
+                                handleUpdateQuantity(item.cartKey, (item.quantity || 1) - 1)
                               }
                               className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-gray-600 shadow-sm hover:scale-110 transition-transform active:scale-95"
                             >
@@ -515,7 +526,7 @@ export function OrderPage({
 
                             <button
                               onClick={() =>
-                                handleUpdateQuantity(item.id, item.quantity + 1)
+                                handleUpdateQuantity(item.cartKey, (item.quantity || 1) + 1)
                               }
                               className="w-8 h-8 flex items-center justify-center rounded-full bg-white text-green-600 shadow-sm hover:scale-110 transition-transform active:scale-95"
                             >
@@ -524,7 +535,7 @@ export function OrderPage({
                           </div>
 
                           <button
-                            onClick={() => handleRemoveItem(item.id)}
+                            onClick={() => handleRemoveItem(item.cartKey)}
                             className="text-xs text-red-400 hover:text-red-600 underline decoration-red-200 hover:decoration-red-500 transition-colors"
                           >
                             Remove
@@ -534,7 +545,7 @@ export function OrderPage({
 
                       {/* Instructions */}
                       <div className="mt-3 pl-9">
-                        {editingNoteId !== item.id ? (
+                        {editingNoteKey !== item.cartKey ? (
                           <button
                             onClick={() => startEditingNote(item)}
                             className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-orange-500 transition-colors"
@@ -557,7 +568,7 @@ export function OrderPage({
                               onChange={(e) =>
                                 setNoteDrafts((prev) => ({
                                   ...prev,
-                                  [item.id]: e.target.value
+                                  [noteKey]: e.target.value
                                 }))
                               }
                               className="text-sm border-gray-200 focus-visible:ring-orange-500 bg-white"
@@ -567,14 +578,14 @@ export function OrderPage({
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => cancelNoteForItem(item.id)}
+                                onClick={() => cancelNoteForItem(item.cartKey)}
                                 className="text-gray-500 hover:text-gray-800"
                               >
                                 Cancel
                               </Button>
                               <Button
                                 size="sm"
-                                onClick={() => saveNoteForItem(item.id)}
+                                onClick={() => saveNoteForItem(item.cartKey)}
                                 className="bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow-sm"
                               >
                                 Save Note
@@ -592,7 +603,7 @@ export function OrderPage({
             </div>
           </div>
 
-          {/* Right Column */}
+          {/* Right */}
           <div className="space-y-6">
             {/* Coupon card */}
             {computedTotal > 1000 && (
@@ -612,9 +623,7 @@ export function OrderPage({
                       <span className="block font-bold text-gray-800">
                         Available Offers
                       </span>
-                      <span className="text-xs text-gray-500">
-                        Tap to view coupons
-                      </span>
+                      <span className="text-xs text-gray-500">Tap to view coupons</span>
                     </div>
                   </div>
 
@@ -665,9 +674,7 @@ export function OrderPage({
                         {appliedCoupon?.code}
                       </span>
                     </span>
-                    <span className="font-bold">
-                      -{formatPriceAUD(discount)}
-                    </span>
+                    <span className="font-bold">-{formatPriceAUD(discount)}</span>
                   </div>
                 )}
 
@@ -716,6 +723,22 @@ export function OrderPage({
                   By proceeding, you agree to our Terms & Conditions
                 </p>
               </div>
+
+              {/* COD */}
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    handlePlaceOrderCODInternal()
+                  }}
+                  disabled={placingOrder || items.length === 0}
+                  className="w-full bg-gray-900 hover:bg-black text-white py-6 text-lg font-bold rounded-xl shadow-lg active:scale-95 disabled:opacity-70"
+                >
+                  Cash on Delivery
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -739,7 +762,7 @@ export function OrderPage({
         isOpen={isCouponModalOpen}
         onClose={() => setIsCouponModalOpen(false)}
         onApplyCoupon={handleApplyCoupon}
-        currentTotal={computedTotal} // ✅ cents
+        currentTotal={computedTotal} // cents
         appliedCoupon={appliedCoupon}
         storeCode={currentStore}
       />

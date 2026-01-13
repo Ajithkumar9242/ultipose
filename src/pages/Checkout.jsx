@@ -7,32 +7,36 @@ import { useState, useMemo } from "react"
 import { OrderPage } from "../components/OrderPage"
 import api from "../api/index"
 import { toast } from "react-hot-toast"
+import { useDispatch } from "react-redux"
+import { clearCartForStore } from "@/redux/store"
 
 export default function Checkout() {
   const navigate = useNavigate()
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
+  const dispatch = useDispatch()
 
-  // ✅ fix redux warning (no selector object creation)
-  const currentStore = useSelector(state => state.cart.currentStore)
+  // ✅ IMPORTANT: track placed order id
+  const [placedOrderId, setPlacedOrderId] = useState(null)
 
-  const cartItems = useSelector(state =>
+  const currentStore = useSelector((state) => state.cart.currentStore)
+
+  const cartItems = useSelector((state) =>
     currentStore ? state.cart.byStore[currentStore] || [] : []
   )
 
-  const savedUser = useSelector(state => {
+  const savedUser = useSelector((state) => {
     const byStore = state.user.byStore || {}
     return currentStore ? byStore[currentStore] || null : null
   })
 
-  // ✅ helper
-  const toNumber = v => {
+  const toNumber = (v) => {
     const n = Number(v)
     return Number.isFinite(n) ? n : 0
   }
 
-  // ✅ items payload EXACTLY for order.py -> build_order_items()
+  // ✅ IMPORTANT: these prices are CENTS already in your UI
   const itemsPayload = useMemo(() => {
-    return (cartItems || []).map(i => {
+    return (cartItems || []).map((i) => {
       const qty = toNumber(i.quantity || 1)
 
       const base = toNumber(i.selectedVariant?.price ?? i.price ?? 0)
@@ -51,16 +55,15 @@ export default function Checkout() {
       const total_price = unit_price * qty
 
       return {
-        menu_item: i.id,
-        item_name: i.name,
+        menu_item: i.foodItem?.id || i.id,
+        item_name: i.foodItem?.name || i.name,
         qty,
-        unit_price,
-        total_price
+        unit_price,   // cents
+        total_price   // cents
       }
     })
   }, [cartItems])
 
-  // ✅ total
   const getCartTotal = () =>
     (cartItems || []).reduce((total, item) => {
       const base = toNumber(item.selectedVariant?.price ?? item.price ?? 0)
@@ -80,7 +83,30 @@ export default function Checkout() {
     else navigate(-1)
   }
 
-  const handleGoToPayment = async orderDetails => {
+  const clearStoreCartPersisted = (storeCode) => {
+    try {
+      // 1) clear redux
+      dispatch(clearCartForStore(storeCode))
+
+      // 2) clear localStorage instantly
+      const raw = localStorage.getItem("cartSlice")
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed?.byStore?.[storeCode]) {
+          parsed.byStore[storeCode] = []
+        }
+        localStorage.setItem("cartSlice", JSON.stringify(parsed))
+      }
+
+      // 3) remove notes
+      localStorage.removeItem("itemNotes")
+    } catch (e) {
+      console.log("Cart clear error", e)
+    }
+  }
+
+  // ---------------------- ONLINE PAYMENT ----------------------
+  const handleGoToPayment = async (orderDetails) => {
     if (!itemsPayload.length) {
       toast.error("Your cart is empty")
       return
@@ -94,7 +120,6 @@ export default function Checkout() {
     try {
       setIsPlacingOrder(true)
 
-      // ✅ customer object (used ONLY for create_or_update)
       const customerObj = {
         name: orderDetails?.userDetails?.name || savedUser?.name || "",
         phone: orderDetails?.userDetails?.phone || savedUser?.phone || "",
@@ -106,14 +131,13 @@ export default function Checkout() {
         return
       }
 
-      // ✅ 1) create/update customer -> get customer_id
+      // ✅ 1) create/update customer
       const custRes = await api.post(
         "/api/method/ultipos.api.checkout.create_or_update",
         customerObj
       )
 
       const customer_id = custRes?.data?.message?.customer_id
-
       if (!customer_id) {
         toast.error("Failed to create customer")
         return
@@ -121,60 +145,64 @@ export default function Checkout() {
 
       // ✅ 2) place order
       const paymentObj = {
-        method: orderDetails?.paymentMethod === "online" ? "Online" : "Cash",
+        method: "Online",
         transaction_id: "TX-" + Date.now()
       }
 
       const orderRes = await api.post("/api/method/ultipos.api.order.place", {
         outlet_code: currentStore,
-        customer_id: customer_id,
+        customer_id,
 
-        // ✅ MUST stringify because backend uses _loads()
+        customer_name: customerObj.name,
+        customer_phone: customerObj.phone,
+        customer_email: customerObj.email,
+        delivery_address: orderDetails?.deliveryAddress || "",
+
         items: JSON.stringify(itemsPayload),
         payment: JSON.stringify(paymentObj),
 
-        coupon_code: orderDetails?.coupon?.code || null,
+        coupon_code: orderDetails?.appliedCoupon?.code || null,
         order_type: orderDetails?.orderType || "Delivery",
         notes: orderDetails?.notes || null
       })
 
       const orderData = orderRes?.data?.message
-      console.log("ORDER PLACE RESPONSE:", orderData)
-
       if (!orderData?.order_id) {
         toast.error("Order failed: order_id missing")
         return
       }
 
-      // ✅ online payment: create intent -> redirect
-      // if (orderDetails?.paymentMethod === "online") {
-      //   const payRes = await api.post("/api/method/ultipos.api.payment.create_intent", {
-      //     outlet_code: currentStore,
-      //     amount: toNumber(orderDetails?.total ?? getCartTotal()),
-      //     order_id: orderData.order_id,
-      //     customer: JSON.stringify(customerObj)
-      //   })
+      // ✅ IMPORTANT: mark placed order id (prevents auto redirect to home)
+      setPlacedOrderId(orderData.order_id)
 
-      //   const redirect_url = payRes?.data?.message?.redirect_url
+      // ✅ Clear cart safely
+      clearStoreCartPersisted(currentStore)
 
-      //   if (!redirect_url) {
-      //     toast.error("Payment redirect_url missing")
-      //     return
-      //   }
+      // ✅ 3) Create payment intent
+      const amount = toNumber(orderDetails?.total ?? getCartTotal()) // cents
 
-      //   window.location.assign(redirect_url)
-      //   return
-      // }
-      if (orderDetails?.paymentMethod === "online") {
-  window.location.assign(
-    `/worldline-pay?amount=${toNumber(orderDetails?.total ?? getCartTotal())}&order_id=${orderData.order_id}`
-  )
-  return
-}
+      const payRes = await api.post(
+        "/api/method/ultipos.api.payment.create_intent",
+        {
+          outlet_code: currentStore,
+          amount,
+          order_id: orderData.order_id,
+          customer: JSON.stringify(customerObj)
+        }
+      )
 
+      const redirect_url = payRes?.data?.message?.redirect_url
 
-      // ✅ cash -> status page
-      navigate(`/order-status/${orderData.order_id}`)
+      if (!redirect_url) {
+        toast.error("Payment redirect_url missing")
+        // if payment intent fails, go to order status anyway
+        navigate(`/order-status/${orderData.order_id}`)
+        return
+      }
+
+      // ✅ redirect to gateway
+      window.location.href = redirect_url
+      return
     } catch (err) {
       console.error(err)
       toast.error(err?.response?.data?.message || err?.message || "Checkout failed")
@@ -183,8 +211,92 @@ export default function Checkout() {
     }
   }
 
-  // ✅ if cart empty
-  if (!cartItems || cartItems.length === 0) {
+  // ---------------------- CASH ON DELIVERY ----------------------
+  const handleGoToCOD = async (orderDetails) => {
+    if (!itemsPayload.length) {
+      toast.error("Your cart is empty")
+      return
+    }
+
+    if (!currentStore) {
+      toast.error("Missing store information")
+      return
+    }
+
+    try {
+      setIsPlacingOrder(true)
+
+      const customerObj = {
+        name: orderDetails?.userDetails?.name || savedUser?.name || "",
+        phone: orderDetails?.userDetails?.phone || savedUser?.phone || "",
+        email: orderDetails?.userDetails?.email || savedUser?.email || ""
+      }
+
+      if (!customerObj.phone) {
+        toast.error("Phone number required")
+        return
+      }
+
+      // ✅ create/update customer
+      const custRes = await api.post(
+        "/api/method/ultipos.api.checkout.create_or_update",
+        customerObj
+      )
+
+      const customer_id = custRes?.data?.message?.customer_id
+      if (!customer_id) {
+        toast.error("Failed to create customer")
+        return
+      }
+
+      // ✅ place COD order
+      const paymentObj = {
+        method: "COD",
+        transaction_id: null
+      }
+
+      const orderRes = await api.post("/api/method/ultipos.api.order.place", {
+        outlet_code: currentStore,
+        customer_id,
+
+        customer_name: customerObj.name,
+        customer_phone: customerObj.phone,
+        customer_email: customerObj.email,
+        delivery_address: orderDetails?.deliveryAddress || "",
+
+        items: JSON.stringify(itemsPayload),
+        payment: JSON.stringify(paymentObj),
+
+        coupon_code: orderDetails?.appliedCoupon?.code || null,
+        order_type: orderDetails?.orderType || "Delivery",
+        notes: orderDetails?.notes || null
+      })
+
+      const orderData = orderRes?.data?.message
+      if (!orderData?.order_id) {
+        toast.error("Order failed: order_id missing")
+        return
+      }
+
+      toast.success("Order placed (COD) ✅")
+
+      // ✅ IMPORTANT: mark placed order id (prevents auto redirect)
+      setPlacedOrderId(orderData.order_id)
+
+      clearStoreCartPersisted(currentStore)
+
+      // ✅ go to order status
+      navigate(`/order-status/${orderData.order_id}`)
+    } catch (err) {
+      console.error(err)
+      toast.error(err?.response?.data?.message || err?.message || "COD Failed")
+    } finally {
+      setIsPlacingOrder(false)
+    }
+  }
+
+  // ✅ FIXED: don't redirect to home if order already placed
+  if ((!cartItems || cartItems.length === 0) && !isPlacingOrder && !placedOrderId) {
     if (currentStore) navigate(`/s/${currentStore}`)
     else navigate("/")
     return null
@@ -196,6 +308,7 @@ export default function Checkout() {
       userDetails={savedUser}
       onBack={handleBack}
       onPlaceOrder={handleGoToPayment}
+      onPlaceOrderCOD={handleGoToCOD}
       placingOrder={isPlacingOrder}
       total={getCartTotal()}
       storeCode={currentStore}
