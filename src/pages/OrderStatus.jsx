@@ -119,7 +119,6 @@ export default function OrderStatusPage() {
     if (!orderId) return
 
     fetchStatus(true)
-
     intervalRef.current = setInterval(() => fetchStatus(false), 4000)
 
     return () => {
@@ -203,9 +202,11 @@ export default function OrderStatusPage() {
   const customer = order.customer || {}
   const items = Array.isArray(order.items) ? order.items : []
 
-  // ✅ BACKEND SENDS DOLLARS NOW (IMPORTANT)
-  const paidAmount =
-    Number(order?.grand_total ?? order?.amount ?? order?.total_amount ?? 0) || 0
+  // ✅ backend sends dollars
+  const subtotal = Number(order?.subtotal ?? 0) || 0
+  const discount = Number(order?.discount ?? 0) || 0
+  const couponCode = order?.coupon_code || null
+  const grandTotal = Number(order?.grand_total ?? order?.amount ?? 0) || 0
 
   const handlePreviewInvoice = () => {
     const dateStr = new Date(order.createdAt || Date.now()).toLocaleString()
@@ -218,19 +219,42 @@ export default function OrderStatusPage() {
     if (!popup) return
 
     const itemsHtml = items
-      .map(item => {
+      .map((item) => {
         const qty = Number(item.qty ?? item.quantity ?? 1) || 1
-
-        // ✅ DOLLARS
         const unit = Number(item.unit_price ?? item.price ?? 0) || 0
         const line = Number(item.total_price ?? unit * qty) || 0
+
+        const mods = Array.isArray(item.modifiers) ? item.modifiers : []
+
+        const modsHtml = mods.length
+          ? `
+            <div style="margin-left:12px;margin-top:6px;">
+              ${mods
+                .map((m) => {
+                  const mqty = Number(m.qty ?? 1) || 1
+                  const price = Number(m.price ?? 0) || 0
+                  return `
+                    <div class="item-row" style="font-size:12px;color:#444;margin-bottom:6px;">
+                      <div class="qty">+</div>
+                      <div class="name">${m.name} ${
+                        mqty > 1 ? `x${mqty}` : ""
+                      }</div>
+                      <div class="price">${formatAUD(price * mqty)}</div>
+                    </div>
+                  `
+                })
+                .join("")}
+            </div>
+          `
+          : ""
 
         return `
           <div class="item-row">
             <div class="qty">${qty}x</div>
-            <div class="name">${item.name || item.item_name || "Item"}</div>
+            <div class="name">${item.item_name || "Item"}</div>
             <div class="price">${formatAUD(line)}</div>
           </div>
+          ${modsHtml}
         `
       })
       .join("")
@@ -263,11 +287,32 @@ export default function OrderStatusPage() {
 
             <div class="divider"></div>
             ${itemsHtml || "<p style='text-align:center;color:#666'>No items</p>"}
+
             <div class="divider"></div>
+
+            <div class="item-row">
+              <div class="qty"></div>
+              <div class="name">Subtotal</div>
+              <div class="price">${formatAUD(subtotal)}</div>
+            </div>
+
+            ${
+              discount > 0
+                ? `
+              <div class="item-row">
+                <div class="qty"></div>
+                <div class="name">Discount ${
+                  couponCode ? `(${couponCode})` : ""
+                }</div>
+                <div class="price">- ${formatAUD(discount)}</div>
+              </div>
+            `
+                : ""
+            }
 
             <div class="final">
               <span>TOTAL</span>
-              <span>${formatAUD(paidAmount)}</span>
+              <span>${formatAUD(grandTotal)}</span>
             </div>
 
             <div class="action">
@@ -291,9 +336,7 @@ export default function OrderStatusPage() {
             <Button
               variant="outline"
               size="icon"
-              onClick={() =>
-                storeCode ? navigate(`/s/${storeCode}`) : navigate("/")
-              }
+              onClick={() => (storeCode ? navigate(`/s/${storeCode}`) : navigate("/"))}
               className="rounded-full border-white/40 bg-white/10 text-white"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -317,11 +360,7 @@ export default function OrderStatusPage() {
             </div>
           </div>
 
-          <span
-            className={
-              "px-3 py-1 rounded-full text-xs font-bold " + statusBadgeClass
-            }
-          >
+          <span className={"px-3 py-1 rounded-full text-xs font-bold " + statusBadgeClass}>
             {status}
           </span>
         </div>
@@ -333,11 +372,35 @@ export default function OrderStatusPage() {
         <div className="bg-white rounded-2xl shadow-sm border p-6 flex justify-between">
           <div>
             <p className="text-xs font-bold text-gray-400 uppercase">
-              Total Paid
+              Grand Total
             </p>
             <p className="text-3xl font-bold text-gray-900">
-              {formatAUD(paidAmount)}
+              {formatAUD(grandTotal)}
             </p>
+          </div>
+        </div>
+
+        {/* Bill Summary */}
+        <div className="bg-white rounded-2xl shadow-sm border p-6 space-y-3">
+          <p className="font-bold text-gray-900">Bill Summary</p>
+
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>Subtotal</span>
+            <span className="font-semibold text-gray-900">{formatAUD(subtotal)}</span>
+          </div>
+
+          {discount > 0 && (
+            <div className="flex justify-between text-sm text-green-700 bg-green-50 p-2 rounded-lg">
+              <span className="font-semibold">
+                Discount {couponCode ? <span className="text-xs">({couponCode})</span> : ""}
+              </span>
+              <span className="font-bold">- {formatAUD(discount)}</span>
+            </div>
+          )}
+
+          <div className="border-t pt-3 flex justify-between text-base">
+            <span className="font-bold text-gray-900">Grand Total</span>
+            <span className="font-extrabold text-gray-900">{formatAUD(grandTotal)}</span>
           </div>
         </div>
 
@@ -351,17 +414,51 @@ export default function OrderStatusPage() {
           {items.length === 0 ? (
             <p className="text-sm text-gray-500">No items found for this order.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {items.map((it, idx) => {
                 const qty = Number(it.qty ?? it.quantity ?? 1) || 1
-                const line = Number(it.total_price ?? 0) || 0 // ✅ dollars
+                const unit = Number(it.unit_price ?? 0) || 0
+                const line = Number(it.total_price ?? unit * qty) || 0
+
+                const mods = Array.isArray(it.modifiers) ? it.modifiers : []
 
                 return (
-                  <div key={idx} className="flex justify-between text-sm">
-                    <span className="text-gray-700">
-                      {qty}x {it.name || it.item_name || "Item"}
-                    </span>
-                    <span className="font-bold">{formatAUD(line)}</span>
+                  <div key={idx} className="border-b last:border-b-0 pb-3">
+                    <div className="flex justify-between text-sm">
+                      <div className="text-gray-800 font-semibold">
+                        {qty}x {it.name || it.item_name || "Item"}
+                        <div className="text-xs text-gray-500 font-normal">
+                          Unit: {formatAUD(unit)}
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="font-bold text-gray-900">{formatAUD(line)}</div>
+                      </div>
+                    </div>
+
+                    {/* ✅ Modifiers/Addons */}
+                    {mods.length > 0 && (
+                      <div className="mt-2 ml-4 space-y-1">
+                        {mods.map((m, mi) => {
+                          const mqty = Number(m.qty ?? 1) || 1
+                          const price = Number(m.price ?? 0) || 0
+                          return (
+                            <div
+                              key={mi}
+                              className="flex justify-between text-xs text-gray-600"
+                            >
+                              <span>
+                                + {m.name} {mqty > 1 ? `x${mqty}` : ""}
+                              </span>
+                              <span className="font-semibold">
+                                {formatAUD(price * mqty)}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -396,7 +493,10 @@ export default function OrderStatusPage() {
               Provider: <b>{order.payment?.provider || "UltiPOS"}</b>
             </p>
             <p className="text-sm text-gray-600">
-              Amount: <b>{formatAUD(paidAmount)}</b>
+              Method: <b>{order.payment?.method || "COD"}</b>
+            </p>
+            <p className="text-sm text-gray-600">
+              Amount: <b>{formatAUD(grandTotal)}</b>
             </p>
           </div>
         </div>
