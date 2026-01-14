@@ -12,6 +12,7 @@ import OrderStatusPage from "./pages/OrderStatus"
 import FakeWorldline from "./pages/FakeWorldline"
 import Payment from "./pages/Payment"
 import WorldlinePay from "./pages/Worldlinepay"
+import OrderHistoryPage from "./pages/OrderHistory"
 
 function App() {
   return (
@@ -50,6 +51,7 @@ function App() {
       <Route path="/checkout" element={<Checkout />} />
       <Route path="/cart" element={<Cart />} />
 <Route path="/worldline-pay" element={<WorldlinePay />} />
+<Route path="/order-history" element={<OrderHistoryPage />} />
 
       {/* Not Found */}
       <Route path="*" element={<NotFound />} />

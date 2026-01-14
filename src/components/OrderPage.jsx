@@ -21,6 +21,7 @@ import { setLocation } from "@/redux/locationSlice"
 import { updateQuantity, removeItem } from "@/redux/store"
 import { formatPriceAUD } from "../utils/currency"
 import { toast } from "react-hot-toast"
+import { useNavigate } from "react-router-dom"
 
 export function OrderPage({
   cartItems,
@@ -48,6 +49,8 @@ export function OrderPage({
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false)
   const [hasAutoOpenedAddressModal, setHasAutoOpenedAddressModal] =
     useState(false)
+
+const navigate = useNavigate()
 
   // 🔥 currentStore
   const currentStore = useSelector((state) => state.cart.currentStore)
@@ -740,6 +743,10 @@ export function OrderPage({
                 </Button>
               </div>
             </div>
+            <Button onClick={() => navigate("/order-history")}>
+  My Orders
+</Button>
+
           </div>
         </div>
       </div>
