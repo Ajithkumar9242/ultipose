@@ -25,12 +25,12 @@ const STATUS_COLOR_BADGE = {
   READY: "bg-emerald-100 text-emerald-700",
   IN_PROGRESS: "bg-blue-100 text-blue-700",
   CONFIRMED: "bg-cyan-100 text-cyan-700",
+  NEW: "bg-gray-100 text-gray-700",
+  AWAITING: "bg-amber-100 text-amber-700",
   PENDING: "bg-gray-100 text-gray-700",
   AWAITING_PAYMENT: "bg-amber-100 text-amber-700",
   FAILED: "bg-red-100 text-red-700",
-  CANCELLED: "bg-red-100 text-red-700",
-  New: "bg-gray-100 text-gray-700",
-  Awaiting: "bg-amber-100 text-amber-700"
+  CANCELLED: "bg-red-100 text-red-700"
 }
 
 function mapBackendStatusToUiKey(status) {
@@ -47,6 +47,8 @@ function mapBackendStatusToUiKey(status) {
     case "FAILED":
     case "CANCELLED":
       return "cancelled"
+    case "NEW":
+    case "AWAITING":
     case "PENDING":
     case "AWAITING_PAYMENT":
     default:
@@ -59,14 +61,10 @@ function formatAUD(value) {
   const n = Number(value)
   return new Intl.NumberFormat("en-AU", {
     style: "currency",
-    currency: "AUD"
+    currency: "AUD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   }).format(Number.isFinite(n) ? n : 0)
-}
-
-// ✅ helper: cents -> dollars
-function centsToDollars(v) {
-  const n = Number(v)
-  return Number.isFinite(n) ? n / 100 : 0
 }
 
 export default function OrderStatusPage() {
@@ -107,7 +105,9 @@ export default function OrderStatusPage() {
       console.warn("order fetch failed", err)
       if (isInitial) {
         setInitialError(
-          err?.response?.data?.message || err?.message || "Unable to fetch order."
+          err?.response?.data?.message ||
+            err?.message ||
+            "Unable to fetch order."
         )
       }
     } finally {
@@ -117,11 +117,25 @@ export default function OrderStatusPage() {
 
   useEffect(() => {
     if (!orderId) return
+
     fetchStatus(true)
 
     intervalRef.current = setInterval(() => fetchStatus(false), 4000)
-    return () => clearInterval(intervalRef.current)
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
   }, [orderId])
+
+  // ✅ STOP polling when order finished
+  useEffect(() => {
+    if (!order) return
+    const st = String(order.status || order.order_status || "").toUpperCase()
+
+    if (["COMPLETED", "PAID", "CANCELLED", "FAILED"].includes(st)) {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [order])
 
   // ---------------- UI STATES ----------------
   if (!orderId) {
@@ -157,7 +171,8 @@ export default function OrderStatusPage() {
   }
 
   // ---------------- NORMAL ----------------
-  const status = order.status || order.order_status || "PENDING"
+  const rawStatus = order.status || order.order_status || "PENDING"
+  const status = String(rawStatus).trim().toUpperCase()
   const uiStatusKey = mapBackendStatusToUiKey(status)
 
   const isCancelled = uiStatusKey === "cancelled"
@@ -182,21 +197,16 @@ export default function OrderStatusPage() {
 
   const storeCode =
     order.storeCode || order.store_code || order.outlet_code || order.outlet
+
   const storeName = order.storeName || order.restaurant || storeCode || "Store"
 
   const customer = order.customer || {}
-
-  // ✅ ITEMS list
   const items = Array.isArray(order.items) ? order.items : []
 
-  // ✅ AMOUNT from backend (CENTs)
-  const rawAmountCents =
+  // ✅ BACKEND SENDS DOLLARS NOW (IMPORTANT)
+  const paidAmount =
     Number(order?.grand_total ?? order?.amount ?? order?.total_amount ?? 0) || 0
 
-  // ✅ converted to dollars
-  const paidAmount = centsToDollars(rawAmountCents)
-
-  // ✅ Invoice Preview
   const handlePreviewInvoice = () => {
     const dateStr = new Date(order.createdAt || Date.now()).toLocaleString()
 
@@ -208,12 +218,12 @@ export default function OrderStatusPage() {
     if (!popup) return
 
     const itemsHtml = items
-      .map((item) => {
+      .map(item => {
         const qty = Number(item.qty ?? item.quantity ?? 1) || 1
 
-        // ✅ unit/line in CENTS -> convert to DOLLARS
-        const unit = centsToDollars(item.unit_price ?? item.price ?? 0)
-        const line = centsToDollars(item.total_price ?? unit * qty * 100)
+        // ✅ DOLLARS
+        const unit = Number(item.unit_price ?? item.price ?? 0) || 0
+        const line = Number(item.total_price ?? unit * qty) || 0
 
         return `
           <div class="item-row">
@@ -339,14 +349,12 @@ export default function OrderStatusPage() {
           </div>
 
           {items.length === 0 ? (
-            <p className="text-sm text-gray-500">
-              No items found for this order.
-            </p>
+            <p className="text-sm text-gray-500">No items found for this order.</p>
           ) : (
             <div className="space-y-3">
               {items.map((it, idx) => {
                 const qty = Number(it.qty ?? it.quantity ?? 1) || 1
-                const line = centsToDollars(it.total_price ?? 0)
+                const line = Number(it.total_price ?? 0) || 0 // ✅ dollars
 
                 return (
                   <div key={idx} className="flex justify-between text-sm">

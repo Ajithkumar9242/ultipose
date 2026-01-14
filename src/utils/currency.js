@@ -1,22 +1,14 @@
 // src/utils/currency.js
+// ✅ We use dollars everywhere (same as Frappe Desk)
 
-// 🔹 Assumption:
-// API gives price in *cents* (e.g. 1899 => 18.99 AUD)
-// If later they change it to full dollars, you just switch fromMinorUnit to false where needed.
-
-export function formatPriceAUD(amount, options = {}) {
-  const { fromMinorUnit = true } = options;
-
-  if (amount == null || isNaN(amount)) {
-    return "$0.00";
-  }
-
-  const value = fromMinorUnit ? amount / 100 : amount;
+export function formatPriceAUD(amount) {
+  const n = Number(amount)
+  const value = Number.isFinite(n) ? n : 0
 
   return new Intl.NumberFormat("en-AU", {
     style: "currency",
     currency: "AUD",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }).format(value);
+  }).format(value)
 }

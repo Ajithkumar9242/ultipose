@@ -35,34 +35,44 @@ export default function Checkout() {
   }
 
   // ✅ IMPORTANT: these prices are CENTS already in your UI
-  const itemsPayload = useMemo(() => {
-    return (cartItems || []).map((i) => {
-      const qty = toNumber(i.quantity || 1)
+  // ✅ IMPORTANT: All prices in DOLLARS (same as Frappe)
+const itemsPayload = useMemo(() => {
+  return (cartItems || []).map((i) => {
+    const qty = toNumber(i.quantity || 1)
 
-      const base = toNumber(i.selectedVariant?.price ?? i.price ?? 0)
+    const base = toNumber(i.selectedVariant?.price ?? i.price ?? 0)
 
-      const addons = (i.selectedAddOns || []).reduce(
-        (s, a) => s + toNumber(a.price),
-        0
-      )
+    const addons = (i.selectedAddOns || []).reduce(
+      (s, a) => s + toNumber(a.price),
+      0
+    )
 
-      const mods = (i.selectedModifiers || []).reduce(
-        (s, m) => s + toNumber(m.price),
-        0
-      )
+    const mods = (i.selectedModifiers || []).reduce(
+      (s, m) => s + toNumber(m.price),
+      0
+    )
 
-      const unit_price = base + addons + mods
-      const total_price = unit_price * qty
+    const unit_price = base + addons + mods
+    const total_price = unit_price * qty
 
-      return {
-        menu_item: i.foodItem?.id || i.id,
-        item_name: i.foodItem?.name || i.name,
-        qty,
-        unit_price,   // cents
-        total_price   // cents
-      }
-    })
-  }, [cartItems])
+    return {
+      menu_item: i.foodItem?.id || i.id,
+      item_name: i.foodItem?.name || i.name,
+      qty,
+
+      // ✅ DOLLARS
+      unit_price,
+      total_price,
+
+      // ✅ VERY IMPORTANT: send these also
+      modifiers: i.selectedModifiers || [], // [{group,id,name,price}]
+      add_ons: i.selectedAddOns || [],      // optional
+      variant: i.selectedVariant || null,   // optional
+      note: i.specialInstructions || ""
+    }
+  })
+}, [cartItems])
+
 
   const getCartTotal = () =>
     (cartItems || []).reduce((total, item) => {
@@ -176,7 +186,7 @@ export default function Checkout() {
       setPlacedOrderId(orderData.order_id)
 
       // ✅ Clear cart safely
-      clearStoreCartPersisted(currentStore)
+      // clearStoreCartPersisted(currentStore)
 
       // ✅ 3) Create payment intent
       const amount = toNumber(orderDetails?.total ?? getCartTotal()) // cents

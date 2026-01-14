@@ -6,7 +6,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { useSelector, useDispatch } from "react-redux"
 import { toast } from "react-hot-toast"
 import api from "@/api"
-
+import { getFileUrl } from "@/utils/getFileUrl"
 import { Button } from "@/components/ui/button"
 import LoadingScreen from "../components/LoadingScreen"
 import NotFound from "./NotFound"
@@ -294,11 +294,16 @@ export default function Menuu() {
                 key={item.id}
                 className="bg-white rounded-2xl p-4 shadow hover:shadow-lg transition"
               >
-                <img
-                  src={item.image || "/placeholder.svg"}
-                  alt={item.name}
-                  className="w-full h-40 object-cover rounded-xl mb-3"
-                />
+<img
+  src={item.image ? getFileUrl(item.image) : "/placeholder.svg"}
+  alt={item.name}
+  className="w-full h-40 object-cover rounded-xl mb-3"
+  onError={(e) => {
+    e.currentTarget.src = "/placeholder.svg"
+  }}
+/>
+
+
 
                 <h3 className="font-bold text-lg">{item.name}</h3>
 
