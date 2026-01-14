@@ -28,10 +28,12 @@ import {
 import { setUserDetails as setUserDetailsRedux } from "../redux/userSlice"
 import { formatPriceAUD } from "../utils/currency"
 import { ShoppingBag, Plus } from "lucide-react"
+import FooterLinks from "@/components/FooterLinks"
 
 export default function Menuu() {
   const { storeCode } = useParams()
   const outletCode = storeCode // ✅ no fallback
+  
 
   const dispatch = useDispatch()
   const navigate = useNavigate()
@@ -368,6 +370,8 @@ export default function Menuu() {
         onAuthComplete={handleAuthComplete}
         initialDetails={savedUser}
       />
+
+      <FooterLinks outletCode={outletCode} />
     </div>
   )
 }
