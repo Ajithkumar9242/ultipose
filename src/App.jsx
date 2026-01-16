@@ -13,6 +13,7 @@ import FakeWorldline from "./pages/FakeWorldline"
 import Payment from "./pages/Payment"
 import WorldlinePay from "./pages/Worldlinepay"
 import OrderHistoryPage from "./pages/OrderHistory"
+import FakePayment from "./pages/FakePayment"
 
 function App() {
   return (
@@ -52,7 +53,7 @@ function App() {
       <Route path="/cart" element={<Cart />} />
 <Route path="/worldline-pay" element={<WorldlinePay />} />
 <Route path="/order-history" element={<OrderHistoryPage />} />
-
+<Route path="/fake-payment" element={<FakePayment />} />
       {/* Not Found */}
       <Route path="*" element={<NotFound />} />
     </Routes>

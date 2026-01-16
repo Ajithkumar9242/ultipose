@@ -32,26 +32,27 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
   // -----------------------------
   // HELPERS
   // -----------------------------
-  const setModifierValue = (groupName, optionId, mode = "single") => {
-    setSelectedModifiers(prev => {
-      const next = { ...prev }
-      const current = Array.isArray(next[groupName]) ? next[groupName] : []
+const setModifierValue = (groupName, optionId, mode = "single") => {
+  setSelectedModifiers(prev => {
+    const next = { ...prev }
+    const current = Array.isArray(next[groupName]) ? next[groupName] : []
 
-      if (mode === "single") {
-        next[groupName] = [optionId]
-        return next
-      }
-
-      // multi
-      if (current.includes(optionId)) {
-        next[groupName] = current.filter(x => x !== optionId)
-      } else {
-        next[groupName] = [...current, optionId]
-      }
-
+    if (mode === "single") {
+      next[groupName] = [optionId]
       return next
-    })
-  }
+    }
+
+    // multi
+    if (current.includes(optionId)) {
+      next[groupName] = current.filter(x => x !== optionId)
+    } else {
+      next[groupName] = [...current, optionId]
+    }
+
+    return next
+  })
+}
+
 
   // ✅ store selected modifier objects in cart
   const selectedModifierObjects = useMemo(() => {
@@ -103,9 +104,11 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
         toast.error(`Please choose an option for "${group}"`)
         return false
       }
+const min = Number(mod.min ?? mod.min_select ?? mod.min_qty ?? 0)
+const max = Number(mod.max ?? mod.max_select ?? mod.max_qty ?? 0)
 
-      const min = Number(mod.min ?? 0)
-      const max = Number(mod.max ?? 0)
+const isRadio = min === 1 && max === 1
+const mode = isRadio ? "single" : "multi"
 
       if (min > 0 && sel.length < min) {
         toast.error(`Please select at least ${min} options for "${group}"`)
@@ -188,10 +191,17 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
               {modifiers.map(mod => {
                 const group = mod.group_id || mod.name
                 const required = !!mod.required
-                const max = Number(mod.max ?? 0)
+                // const min = Number(mod.min ?? 0)
+const min = Number(mod.min ?? 0)
+const max = Number(mod.max ?? 0)
 
-                // max === 1 => radio, else checkbox
-                const mode = max === 1 ? "single" : "multi"
+// ✅ RULE:
+// radio only when exactly 1 required selection
+const isRadio = min === 1 && max === 1
+const mode = isRadio ? "single" : "multi"
+
+console.log("MOD GROUP:", mod.name, mod.min, mod.max, mod)
+
 
                 const selected = selectedModifiers[group] || []
 
@@ -214,12 +224,13 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
                       </div>
 
                       <div className="text-xs text-gray-500 font-medium">
-                        {mode === "multi"
-                          ? max > 0
-                            ? `Choose up to ${max}`
-                            : "Choose any"
-                          : "Choose 1"}
-                      </div>
+  {mode === "single"
+    ? "Choose 1"
+    : max > 0
+    ? `Choose up to ${max}`
+    : "Choose any"}
+</div>
+
                     </div>
 
                     <div className="space-y-2">
@@ -260,11 +271,16 @@ export function ItemDetailsModal({ item, isOpen, onClose, onAddToCart }) {
                           </label>
                         )
                       })}
+                      
                     </div>
                   </div>
                 )
+              
+              console.log("MOD GROUP:", mod.name, mod.min, mod.max, mod)
+
               })}
             </div>
+            
           )}
 
           {/* Special Instructions */}

@@ -316,13 +316,6 @@ const navigate = useNavigate()
     await onPlaceOrderCOD(orderDetails)
   }
 
-  useEffect(() => {
-    if (appliedCoupon && computedTotal <= 1000) {
-      setAppliedCoupon(null)
-      toast("Coupon removed: minimum order value is above $10.")
-    }
-  }, [computedTotal, appliedCoupon])
-
   return (
     <div className="min-h-screen bg-gray-50 font-sans selection:bg-orange-100 selection:text-orange-600">
       {/* Header */}
@@ -609,11 +602,11 @@ const navigate = useNavigate()
           {/* Right */}
           <div className="space-y-6">
             {/* Coupon card */}
-            {computedTotal > 1000 && (
+           
               <div
-                onClick={() => setIsCouponModalOpen(true)}
-                className="bg-gradient-to-r from-orange-50 to-white rounded-2xl p-4 border border-orange-100 cursor-pointer hover:shadow-md transition-all group relative overflow-hidden"
-              >
+  onClick={() => setIsCouponModalOpen(true)}
+  className="bg-gradient-to-r from-orange-50 to-white rounded-2xl p-4 border border-orange-100 cursor-pointer hover:shadow-md transition-all group relative overflow-hidden"
+>
                 <div className="absolute top-0 right-0 w-16 h-16 bg-orange-100 rounded-bl-full -mr-8 -mt-8 z-0"></div>
 
                 <div className="flex items-center justify-between relative z-10">
@@ -652,7 +645,7 @@ const navigate = useNavigate()
                   </div>
                 )}
               </div>
-            )}
+          
 
             {/* Bill Summary */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 h-fit sticky top-24">

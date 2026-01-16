@@ -116,110 +116,66 @@ const itemsPayload = useMemo(() => {
   }
 
   // ---------------------- ONLINE PAYMENT ----------------------
-  const handleGoToPayment = async (orderDetails) => {
-    if (!itemsPayload.length) {
-      toast.error("Your cart is empty")
-      return
-    }
-
-    if (!currentStore) {
-      toast.error("Missing store information")
-      return
-    }
-
-    try {
-      setIsPlacingOrder(true)
-
-      const customerObj = {
-        name: orderDetails?.userDetails?.name || savedUser?.name || "",
-        phone: orderDetails?.userDetails?.phone || savedUser?.phone || "",
-        email: orderDetails?.userDetails?.email || savedUser?.email || ""
-      }
-
-      if (!customerObj.phone) {
-        toast.error("Phone number required")
-        return
-      }
-
-      // ✅ 1) create/update customer
-      const custRes = await api.post(
-        "/api/method/ultipos.api.checkout.create_or_update",
-        customerObj
-      )
-
-      const customer_id = custRes?.data?.message?.customer_id
-      if (!customer_id) {
-        toast.error("Failed to create customer")
-        return
-      }
-
-      // ✅ 2) place order
-      const paymentObj = {
-        method: "Online",
-        transaction_id: "TX-" + Date.now()
-      }
-
-      const orderRes = await api.post("/api/method/ultipos.api.order.place", {
-        outlet_code: currentStore,
-        customer_id,
-
-        customer_name: customerObj.name,
-        customer_phone: customerObj.phone,
-        customer_email: customerObj.email,
-        delivery_address: orderDetails?.deliveryAddress || "",
-
-        items: JSON.stringify(itemsPayload),
-        payment: JSON.stringify(paymentObj),
-
-        coupon_code: orderDetails?.appliedCoupon?.code || null,
-        order_type: orderDetails?.orderType || "Delivery",
-        notes: orderDetails?.notes || null
-      })
-
-      const orderData = orderRes?.data?.message
-      if (!orderData?.order_id) {
-        toast.error("Order failed: order_id missing")
-        return
-      }
-
-      // ✅ IMPORTANT: mark placed order id (prevents auto redirect to home)
-      setPlacedOrderId(orderData.order_id)
-
-      // ✅ Clear cart safely
-      // clearStoreCartPersisted(currentStore)
-
-      // ✅ 3) Create payment intent
-      const amount = toNumber(orderDetails?.total ?? getCartTotal()) // cents
-
-      const payRes = await api.post(
-        "/api/method/ultipos.api.payment.create_intent",
-        {
-          outlet_code: currentStore,
-          amount,
-          order_id: orderData.order_id,
-          customer: JSON.stringify(customerObj)
-        }
-      )
-
-      const redirect_url = payRes?.data?.message?.redirect_url
-
-      if (!redirect_url) {
-        toast.error("Payment redirect_url missing")
-        // if payment intent fails, go to order status anyway
-        navigate(`/order-status/${orderData.order_id}`)
-        return
-      }
-
-      // ✅ redirect to gateway
-      window.location.href = redirect_url
-      return
-    } catch (err) {
-      console.error(err)
-      toast.error(err?.response?.data?.message || err?.message || "Checkout failed")
-    } finally {
-      setIsPlacingOrder(false)
-    }
+const handleGoToPayment = async (orderDetails) => {
+  if (!itemsPayload.length) {
+    toast.error("Your cart is empty")
+    return
   }
+
+  if (!currentStore) {
+    toast.error("Missing store information")
+    return
+  }
+
+  try {
+    setIsPlacingOrder(true)
+
+    const customerObj = {
+      name: orderDetails?.userDetails?.name || savedUser?.name || "",
+      phone: orderDetails?.userDetails?.phone || savedUser?.phone || "",
+      email: orderDetails?.userDetails?.email || savedUser?.email || ""
+    }
+
+    if (!customerObj.phone) {
+      toast.error("Phone number required")
+      return
+    }
+
+    // ✅ 1) create/update customer
+    const custRes = await api.post(
+      "/api/method/ultipos.api.checkout.create_or_update",
+      customerObj
+    )
+
+    const customer_id = custRes?.data?.message?.customer_id
+    if (!customer_id) {
+      toast.error("Failed to create customer")
+      return
+    }
+
+    // ✅ 2) go to fake payment page
+    const amount = toNumber(orderDetails?.total ?? getCartTotal())
+
+    navigate("/fake-payment", {
+      state: {
+        data: {
+          outlet_code: currentStore,
+          customerObj,
+          customer_id,
+          itemsPayload,
+          orderDetails,
+          amount
+        }
+      }
+    })
+  } catch (err) {
+    console.error(err)
+    toast.error(err?.response?.data?.message || err?.message || "Checkout failed")
+  } finally {
+    setIsPlacingOrder(false)
+  }
+}
+
 
   // ---------------------- CASH ON DELIVERY ----------------------
   const handleGoToCOD = async (orderDetails) => {
