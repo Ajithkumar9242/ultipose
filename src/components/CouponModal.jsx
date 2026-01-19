@@ -61,26 +61,24 @@ const fetchCoupons = async () => {
       const discountValue = Number(c.discount_value || 0)
 
       // ✅ convert backend amounts -> cents
-      const minOrderCents = Math.round(Number(c.min_order_amount || 0) * 100)
-      const maxDiscountCents = c.max_discount
-        ? Math.round(Number(c.max_discount) * 100)
-        : null
+      const minOrder = Number(c.min_order_amount || 0)
+const maxDiscount = c.max_discount ? Number(c.max_discount) : null
 
-      return {
-        code: String(c.coupon_code || "").toUpperCase(),
-       title: c.coupon_code || "Offer",
-description: "",
+return {
+  code: String(c.coupon_code || "").toUpperCase(),
+  title: c.coupon_code || "Offer",
+  description: "",
 
-        type: discountType,
+  type: discountType,
 
-        discount:
-          discountType === "fixed"
-            ? Math.round(discountValue * 100) // ✅ fixed discount in cents
-            : discountValue, // ✅ percentage in %
+  // ✅ NO *100 HERE
+  discount: discountValue,
 
-        minOrder: minOrderCents,
-        maxDiscount: maxDiscountCents
-      }
+  // ✅ NO *100 HERE
+  minOrder,
+  maxDiscount
+}
+
     })
 
     if (!cancelled) {
