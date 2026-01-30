@@ -503,9 +503,22 @@ export default function OrderStatusPage() {
 
         {/* Buttons */}
         <div className="flex gap-3 justify-end">
-          <Button variant="outline" onClick={() => navigate("/")}>
-            Continue shopping
-          </Button>
+<Button
+  variant="outline"
+  onClick={() => {
+    if (storeCode) {
+      dispatch(clearCartForStore(storeCode))
+      localStorage.removeItem("cartSlice")
+      navigate(`/s/${storeCode}`)
+    } else {
+      navigate("/")
+    }
+  }}
+>
+  Continue shopping
+</Button>
+
+
 
           <Button
             className="bg-orange-500 hover:bg-orange-600 text-white"

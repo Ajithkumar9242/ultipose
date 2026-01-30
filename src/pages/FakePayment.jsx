@@ -28,17 +28,19 @@ export default function FakePayment() {
     amount
   } = data
 
-  const handleYesPay = async () => {
-    try {
-      toast.loading("Processing payment...", { id: "pay" })
+const handleYesPay = async () => {
+  try {
+    toast.loading("Processing payment...", { id: "pay" })
 
-      // ✅ after payment success, PLACE ORDER
-      const paymentObj = {
-        method: "Online",
-        transaction_id: "FAKE-TX-" + Date.now()
-      }
+    const paymentObj = {
+      method: "Online",
+      transaction_id: "FAKE-TX-" + Date.now()
+    }
 
-      const orderRes = await api.post("/api/method/ultipos.api.order.place", {
+    // 1️⃣ PLACE ORDER
+    const orderRes = await api.post(
+      "/api/method/ultipos.api.order.place",
+      {
         outlet_code,
         customer_id,
 
@@ -53,25 +55,42 @@ export default function FakePayment() {
         coupon_code: orderDetails?.appliedCoupon?.code || null,
         order_type: orderDetails?.orderType || "Delivery",
         notes: orderDetails?.notes || null
-      })
-
-      const orderData = orderRes?.data?.message
-      const orderId = orderData?.order_id
-
-      if (!orderId) {
-        toast.error("Order failed")
-        return
       }
+    )
 
-      toast.success("Payment successful ✅ Order placed!", { id: "pay" })
+    const orderData = orderRes?.data?.message
+    const orderId = orderData?.order_id
 
-      navigate(`/order-status/${orderId}`)
-    } catch (err) {
-      console.error(err)
-      toast.error("Payment failed", { id: "pay" })
-      navigate("/checkout")
+    if (!orderId) {
+      toast.error("Order failed")
+      return
     }
+
+    // 2️⃣ MARK PAYMENT AS PAID
+    await api.post(
+      "/api/method/ultipos.api.order.mark_paid",
+      {
+        order_id: orderId,
+        transaction_id: paymentObj.transaction_id
+      }
+    )
+
+    toast.success("Payment successful ✅ Order placed!", { id: "pay" })
+
+    await api.post("/api/method/ultipos.api.order.mark_paid", {
+  order_id: orderId,
+  transaction_id: "FAKE-TX-" + Date.now()
+})
+
+navigate(`/order-status/${orderId}`)
+
+  } catch (err) {
+    console.error(err)
+    toast.error("Payment failed", { id: "pay" })
+    navigate("/checkout")
   }
+}
+
 
   const handleNoPay = () => {
     toast("Payment cancelled ❌")
