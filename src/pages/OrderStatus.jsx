@@ -202,11 +202,10 @@ export default function OrderStatusPage() {
   const customer = order.customer || {}
   const items = Array.isArray(order.items) ? order.items : []
 
-  // ✅ backend sends dollars
-  const subtotal = Number(order?.subtotal ?? 0) || 0
-  const discount = Number(order?.discount ?? 0) || 0
+  const subtotal = Number(order?.subtotal ?? order?.total_amount ?? 0) || 0
+  const discount = Number(order?.discount_amount ?? order?.discount ?? 0) || 0
   const couponCode = order?.coupon_code || null
-  const grandTotal = Number(order?.grand_total ?? order?.amount ?? 0) || 0
+  const grandTotal = Number(order?.grand_total ?? order?.total_amount ?? order?.amount ?? 0) || 0
 
   const handlePreviewInvoice = () => {
     const dateStr = new Date(order.createdAt || Date.now()).toLocaleString()
@@ -222,7 +221,9 @@ export default function OrderStatusPage() {
       .map((item) => {
         const qty = Number(item.qty ?? item.quantity ?? 1) || 1
         const unit = Number(item.unit_price ?? item.price ?? 0) || 0
-        const line = Number(item.total_price ?? unit * qty) || 0
+        
+        // 🎯 FIXED: Calculate the base line specifically, so it doesn't double-count the modifiers on the receipt
+        const baseLine = unit * qty
 
         const mods = Array.isArray(item.modifiers) ? item.modifiers : []
 
@@ -252,7 +253,7 @@ export default function OrderStatusPage() {
           <div class="item-row">
             <div class="qty">${qty}x</div>
             <div class="name">${item.item_name || "Item"}</div>
-            <div class="price">${formatAUD(line)}</div>
+            <div class="price">${formatAUD(baseLine)}</div>
           </div>
           ${modsHtml}
         `
@@ -418,7 +419,9 @@ export default function OrderStatusPage() {
               {items.map((it, idx) => {
                 const qty = Number(it.qty ?? it.quantity ?? 1) || 1
                 const unit = Number(it.unit_price ?? 0) || 0
-                const line = Number(it.total_price ?? unit * qty) || 0
+                
+                // 🎯 FIXED: Calculate the base line specifically for the UI as well
+                const baseLine = unit * qty
 
                 const mods = Array.isArray(it.modifiers) ? it.modifiers : []
 
@@ -433,7 +436,7 @@ export default function OrderStatusPage() {
                       </div>
 
                       <div className="text-right">
-                        <div className="font-bold text-gray-900">{formatAUD(line)}</div>
+                        <div className="font-bold text-gray-900">{formatAUD(baseLine)}</div>
                       </div>
                     </div>
 
@@ -503,22 +506,20 @@ export default function OrderStatusPage() {
 
         {/* Buttons */}
         <div className="flex gap-3 justify-end">
-<Button
-  variant="outline"
-  onClick={() => {
-    if (storeCode) {
-      dispatch(clearCartForStore(storeCode))
-      localStorage.removeItem("cartSlice")
-      navigate(`/s/${storeCode}`)
-    } else {
-      navigate("/")
-    }
-  }}
->
-  Continue shopping
-</Button>
-
-
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (storeCode) {
+                dispatch(clearCartForStore(storeCode))
+                localStorage.removeItem("cartSlice")
+                navigate(`/s/${storeCode}`)
+              } else {
+                navigate("/")
+              }
+            }}
+          >
+            Continue shopping
+          </Button>
 
           <Button
             className="bg-orange-500 hover:bg-orange-600 text-white"

@@ -38,23 +38,25 @@ const handleYesPay = async () => {
     }
 
     // 1️⃣ PLACE ORDER
-    const orderRes = await api.post(
-      "/api/method/ultipos.api.order.place",
-      {
+// 1️⃣ PLACE ORDER
+    const payload = {
         outlet_code,
         customer_id,
-
         customer_name: customerObj?.name || "",
         customer_phone: customerObj?.phone || "",
         customer_email: customerObj?.email || "",
         delivery_address: orderDetails?.deliveryAddress || "",
-
         items: JSON.stringify(itemsPayload),
         payment: JSON.stringify(paymentObj),
-
         coupon_code: orderDetails?.appliedCoupon?.code || null,
         order_type: orderDetails?.orderType || "Delivery",
         notes: orderDetails?.notes || null
+    };
+
+    const orderRes = await api.post(
+      "/api/method/ultipos.api.order.place",
+      { 
+        order_data: JSON.stringify(payload) // 🎯 THIS is what Frappe was begging for!
       }
     )
 
