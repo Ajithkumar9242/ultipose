@@ -732,7 +732,7 @@ const navigate = useNavigate()
                   disabled={placingOrder || items.length === 0}
                   className="w-full bg-gray-900 hover:bg-black text-white py-6 text-lg font-bold rounded-xl shadow-lg active:scale-95 disabled:opacity-70"
                 >
-                  Cash on Delivery
+                  Pay at Counter
                 </Button>
               </div>
             </div>

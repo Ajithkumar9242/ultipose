@@ -116,68 +116,105 @@ const itemsPayload = useMemo(() => {
   }
 
   // ---------------------- ONLINE PAYMENT ----------------------
-const handleGoToPayment = async (orderDetails) => {
-  if (!itemsPayload.length) {
-    toast.error("Your cart is empty")
-    return
-  }
-
-  if (!currentStore) {
-    toast.error("Missing store information")
-    return
-  }
-
-  try {
-    setIsPlacingOrder(true)
-
-    const customerObj = {
-      name: orderDetails?.userDetails?.name || savedUser?.name || "",
-      phone: orderDetails?.userDetails?.phone || savedUser?.phone || "",
-      email: orderDetails?.userDetails?.email || savedUser?.email || ""
-    }
-
-    if (!customerObj.phone) {
-      toast.error("Phone number required")
+// ---------------------- ONLINE PAYMENT (STRIPE) ----------------------
+  const handleGoToPayment = async (orderDetails) => {
+    if (!itemsPayload.length) {
+      toast.error("Your cart is empty")
       return
     }
 
-    // ✅ 1) create/update customer
-    const custRes = await api.post(
-      "/api/method/ultipos.api.checkout.create_or_update",
-      customerObj
-    )
-
-    const customer_id = custRes?.data?.message?.customer_id
-    if (!customer_id) {
-      toast.error("Failed to create customer")
+    if (!currentStore) {
+      toast.error("Missing store information")
       return
     }
 
-    // ✅ 2) go to fake payment page
-    const amount = toNumber(orderDetails?.total ?? getCartTotal())
+    try {
+      setIsPlacingOrder(true)
 
-    navigate("/fake-payment", {
-      state: {
-        data: {
-          outlet_code: currentStore,
-          customerObj,
-          customer_id,
-          itemsPayload,
-          orderDetails,
-          amount
-        }
+      const customerObj = {
+        name: orderDetails?.userDetails?.name || savedUser?.name || "",
+        phone: orderDetails?.userDetails?.phone || savedUser?.phone || "",
+        email: orderDetails?.userDetails?.email || savedUser?.email || ""
       }
-    })
-  } catch (err) {
-    console.error(err)
-    toast.error(err?.response?.data?.message || err?.message || "Checkout failed")
-  } finally {
-    setIsPlacingOrder(false)
+
+      if (!customerObj.phone) {
+        toast.error("Phone number required")
+        return
+      }
+
+      // ✅ 1) Create/update customer
+      const custRes = await api.post(
+        "/api/method/ultipos.api.checkout.create_or_update",
+        customerObj
+      )
+
+      const customer_id = custRes?.data?.message?.customer_id
+      if (!customer_id) {
+        toast.error("Failed to create customer")
+        return
+      }
+
+// 🎯 NEW: 2) Place the order FIRST so Stripe has an ID to attach to
+      const paymentObj = {
+        method: "Stripe",
+        transaction_id: null
+      }
+
+      // We pack everything into ONE neat object first
+      const orderPayload = {
+        outlet_code: currentStore,
+        customer_id: customer_id,
+        customer_name: customerObj.name,
+        customer_phone: customerObj.phone,
+        customer_email: customerObj.email,
+        delivery_address: orderDetails?.deliveryAddress || "",
+        items: itemsPayload, 
+        payment: paymentObj,
+        coupon_code: orderDetails?.appliedCoupon?.code || null,
+        order_type: orderDetails?.orderType || "Delivery",
+        notes: orderDetails?.notes || null,
+        platform: "Web"
+      }
+
+      // 🎯 THE FIX: We wrap the whole thing in "order_data" and stringify it, 
+      // exactly how your order.py script expects to receive it!
+      const orderRes = await api.post("/api/method/ultipos.api.order.place", {
+        order_data: JSON.stringify(orderPayload)
+      })
+
+      const orderData = orderRes?.data?.message
+      if (!orderData?.order_id) {
+        toast.error("Order failed: order_id missing")
+        return
+      }
+
+      // 🎯 NEW: 3) Ask backend for the Stripe Checkout URL
+      const stripeRes = await api.post("/api/method/ultipos.api.stripe_pay.create_checkout_session", {
+        order_id: orderData.order_id
+      })
+
+      const stripeData = stripeRes?.data?.message
+      
+      if (stripeData?.success && stripeData?.redirect_url) {
+        // Clear the cart because they are leaving our site to pay
+        clearStoreCartPersisted(currentStore)
+        
+        // 🚀 4) SEND THEM TO STRIPE!
+        window.location.href = stripeData.redirect_url
+      } else {
+        toast.error("Failed to initialize payment gateway.")
+      }
+
+    } catch (err) {
+      console.error(err)
+      toast.error(err?.response?.data?.message || err?.message || "Checkout failed")
+    } finally {
+      setIsPlacingOrder(false)
+    }
   }
-}
 
 
-  // ---------------------- CASH ON DELIVERY ----------------------
+  // ---------------------- Pay at counter ----------------------
   const handleGoToCOD = async (orderDetails) => {
     if (!itemsPayload.length) {
       toast.error("Your cart is empty")
@@ -221,21 +258,25 @@ const handleGoToPayment = async (orderDetails) => {
         transaction_id: null
       }
 
-      const orderRes = await api.post("/api/method/ultipos.api.order.place", {
+      // 🎯 THE FIX: Pack it all into one object first
+      const orderPayload = {
         outlet_code: currentStore,
-        customer_id,
-
+        customer_id: customer_id,
         customer_name: customerObj.name,
         customer_phone: customerObj.phone,
         customer_email: customerObj.email,
         delivery_address: orderDetails?.deliveryAddress || "",
-
-        items: JSON.stringify(itemsPayload),
-        payment: JSON.stringify(paymentObj),
-
+        items: itemsPayload,
+        payment: paymentObj,
         coupon_code: orderDetails?.appliedCoupon?.code || null,
         order_type: orderDetails?.orderType || "Delivery",
-        notes: orderDetails?.notes || null
+        notes: orderDetails?.notes || null,
+        platform: "Web"
+      }
+
+      // 🎯 Wrap it in "order_data" and stringify, just like the Stripe fix!
+      const orderRes = await api.post("/api/method/ultipos.api.order.place", {
+        order_data: JSON.stringify(orderPayload)
       })
 
       const orderData = orderRes?.data?.message

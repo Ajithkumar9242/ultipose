@@ -9,7 +9,7 @@ const TAB_ICON = {
   details: <Info className="w-4 h-4" />,
   about: <Info className="w-4 h-4" />,
   privacy: <Shield className="w-4 h-4" />,
-  refund: <RotateCcw className="w-4 h-4" />,
+  terms: <RotateCcw className="w-4 h-4" />, // 🎯 FIXED: Changed refund to terms
   contact: <PhoneCall className="w-4 h-4" />
 }
 
@@ -55,7 +55,7 @@ export default function RestaurantInfoModal({
     () => [
       { key: "details", label: "Restaurant Details" },
       { key: "about", label: "About Us" },
-      { key: "refund", label: "Refund Policy" },
+      { key: "terms", label: "Terms & Conditions" }, // 🎯 FIXED: Mapped to DB field
       { key: "privacy", label: "Privacy Policy" },
       { key: "contact", label: "Contact" }
     ],
@@ -72,13 +72,14 @@ export default function RestaurantInfoModal({
             <b>Restaurant:</b> {storeName}
           </p>
           <p>
-            <b>Outlet Code:</b> {info.outlet_code || outletCode}
+            <b>Outlet Code:</b> {outletCode}
           </p>
           <p>
             <b>Address:</b> {info.address || "Not available"}
           </p>
           <p>
-            <b>Phone:</b> {info.phone || "Not available"}
+            {/* 🎯 FIXED: Mapped phone to phone_number */}
+            <b>Phone:</b> {info.phone_number || "Not available"}
           </p>
           <p>
             <b>Email:</b> {info.email || "Not available"}
@@ -87,10 +88,40 @@ export default function RestaurantInfoModal({
       )
     }
 
-    if (activeTab === "about") return info.about_us || "Not available"
-    if (activeTab === "refund") return info.refund_policy || "Not available"
-    if (activeTab === "privacy") return info.privacy_policy || "Not available"
-    if (activeTab === "contact") return info.contact_info || "Not available"
+if (activeTab === "about") {
+      return info.about_us ? (
+        <div dangerouslySetInnerHTML={{ __html: info.about_us }} />
+      ) : (
+        "Not available"
+      )
+    }
+    
+    if (activeTab === "terms") {
+      return info.terms_and_conditions ? (
+        <div dangerouslySetInnerHTML={{ __html: info.terms_and_conditions }} />
+      ) : (
+        "Not available"
+      )
+    }
+    
+    if (activeTab === "privacy") {
+      return info.privacy_policy ? (
+        <div dangerouslySetInnerHTML={{ __html: info.privacy_policy }} />
+      ) : (
+        "Not available"
+      )
+    }
+    
+    // 🎯 FIXED: Auto-generated contact info since we didn't make a specific DB field for it
+    if (activeTab === "contact") {
+      return (
+        <div className="space-y-2 text-sm text-gray-700">
+          <p><b>Phone:</b> {info.phone_number || "Not available"}</p>
+          <p><b>Email:</b> {info.email || "Not available"}</p>
+          <p><b>Address:</b> {info.address || "Not available"}</p>
+        </div>
+      )
+    }
 
     return ""
   }

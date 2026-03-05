@@ -20,6 +20,7 @@ import { useDispatch } from "react-redux"
 import { clearCartForStore } from "@/redux/store"
 
 const STATUS_COLOR_BADGE = {
+  ACCEPTED: "bg-green-100 text-green-700",
   PAID: "bg-green-100 text-green-700",
   COMPLETED: "bg-green-100 text-green-700",
   READY: "bg-emerald-100 text-emerald-700",
@@ -41,6 +42,7 @@ function mapBackendStatusToUiKey(status) {
       return "preparing"
     case "READY":
       return "ready"
+    case "ACCEPTED":
     case "COMPLETED":
     case "PAID":
       return "completed"
@@ -127,11 +129,13 @@ export default function OrderStatusPage() {
   }, [orderId])
 
   // ✅ STOP polling when order finished
+// ✅ STOP polling when order finished
   useEffect(() => {
     if (!order) return
     const st = String(order.status || order.order_status || "").toUpperCase()
 
-    if (["COMPLETED", "PAID", "CANCELLED", "FAILED"].includes(st)) {
+    // 🎯 ADDED "ACCEPTED" to this list!
+    if (["ACCEPTED", "COMPLETED", "PAID", "CANCELLED", "FAILED"].includes(st)) {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
   }, [order])
@@ -490,13 +494,13 @@ export default function OrderStatusPage() {
             )}
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border p-6 space-y-3">
+        <div className="bg-white rounded-2xl shadow-sm border p-6 space-y-3">
             <p className="font-semibold">Payment</p>
             <p className="text-sm text-gray-600">
-              Provider: <b>{order.payment?.provider || "UltiPOS"}</b>
+              Provider: <b>{order.payment?.platform || order.payment?.provider || (order.payment_status === "Paid" ? "Stripe" : "UltiPOS")}</b>
             </p>
             <p className="text-sm text-gray-600">
-              Method: <b>{order.payment?.method || "COD"}</b>
+              Method: <b>{order.payment?.payment_method || order.payment?.method || (order.payment_status === "Paid" ? "Online" : "COD")}</b>
             </p>
             <p className="text-sm text-gray-600">
               Amount: <b>{formatAUD(grandTotal)}</b>
