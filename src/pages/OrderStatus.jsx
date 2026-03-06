@@ -20,39 +20,29 @@ import { useDispatch } from "react-redux"
 import { clearCartForStore } from "@/redux/store"
 
 const STATUS_COLOR_BADGE = {
-  ACCEPTED: "bg-green-100 text-green-700",
-  PAID: "bg-green-100 text-green-700",
-  COMPLETED: "bg-green-100 text-green-700",
-  READY: "bg-emerald-100 text-emerald-700",
-  IN_PROGRESS: "bg-blue-100 text-blue-700",
-  CONFIRMED: "bg-cyan-100 text-cyan-700",
-  NEW: "bg-gray-100 text-gray-700",
-  AWAITING: "bg-amber-100 text-amber-700",
-  PENDING: "bg-gray-100 text-gray-700",
-  AWAITING_PAYMENT: "bg-amber-100 text-amber-700",
-  FAILED: "bg-red-100 text-red-700",
-  CANCELLED: "bg-red-100 text-red-700"
-}
+    NEW: "bg-gray-100 text-gray-700",
+    AWAITING: "bg-amber-100 text-amber-700",
+    ACCEPTED: "bg-blue-100 text-blue-700",
+    PREPARING: "bg-orange-100 text-orange-700", // 🎯 NEW: Orange for cooking
+    READY: "bg-emerald-100 text-emerald-700",   // 🎯 NEW: Emerald for ready
+    COMPLETED: "bg-green-100 text-green-700",
+    CANCELLED: "bg-red-100 text-red-700",
+    FAILED: "bg-red-100 text-red-700"
+  }
 
 function mapBackendStatusToUiKey(status) {
   switch (status) {
-    case "CONFIRMED":
+    case "ACCEPTED":
       return "confirmed"
-    case "IN_PROGRESS":
+    case "PREPARING": // 🎯 FIXED: Map the new backend status
       return "preparing"
     case "READY":
       return "ready"
-    case "ACCEPTED":
     case "COMPLETED":
-    case "PAID":
       return "completed"
-    case "FAILED":
     case "CANCELLED":
+    case "FAILED":
       return "cancelled"
-    case "NEW":
-    case "AWAITING":
-    case "PENDING":
-    case "AWAITING_PAYMENT":
     default:
       return "awaiting_payment"
   }
@@ -88,7 +78,10 @@ export default function OrderStatusPage() {
       }
 
       const res = await api.get("/api/method/ultipos.api.order.get_status", {
-        params: { order_id: orderId }
+        params: { 
+            order_id: orderId,
+            _t: Date.now() 
+        }
       })
 
       const payload = res?.data?.message || null
@@ -128,18 +121,16 @@ export default function OrderStatusPage() {
     }
   }, [orderId])
 
-  // ✅ STOP polling when order finished
-// ✅ STOP polling when order finished
+// ✅ STOP polling ONLY when the order is completely finished
   useEffect(() => {
     if (!order) return
     const st = String(order.status || order.order_status || "").toUpperCase()
 
-    // 🎯 ADDED "ACCEPTED" to this list!
-    if (["ACCEPTED", "COMPLETED", "PAID", "CANCELLED", "FAILED"].includes(st)) {
+    // 🎯 THE FIX: Removed ACCEPTED. It will keep polling every 4 seconds until it is READY or COMPLETED!
+    if (["READY", "COMPLETED", "CANCELLED", "FAILED"].includes(st)) {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
   }, [order])
-
   // ---------------- UI STATES ----------------
   if (!orderId) {
     return (
@@ -180,17 +171,23 @@ export default function OrderStatusPage() {
 
   const isCancelled = uiStatusKey === "cancelled"
   const isAwaiting = uiStatusKey === "awaiting_payment"
+  const isPreparing = uiStatusKey === "preparing"
 
+  // 🎯 THE FIX: Make the header change colors dynamically based on the kitchen!
   const headerBg = isCancelled
     ? "bg-red-500"
     : isAwaiting
     ? "bg-amber-500"
+    : isPreparing
+    ? "bg-orange-500"
     : "bg-emerald-500"
 
   const headerIcon = isCancelled ? (
     <AlertCircle className="w-7 h-7 text-red-500" />
   ) : isAwaiting ? (
     <Clock className="w-7 h-7 text-amber-500" />
+  ) : isPreparing ? (
+    <Clock className="w-7 h-7 text-white" />
   ) : (
     <CheckCircle2 className="w-7 h-7 text-emerald-500" />
   )
