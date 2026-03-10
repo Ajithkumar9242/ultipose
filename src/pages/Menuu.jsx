@@ -46,6 +46,7 @@ export default function Menuu() {
   const [menuCategories, setMenuCategories] = useState(["Menu"])
   const [selectedCategory, setSelectedCategory] = useState("Menu")
   const [vegOnly, setVegOnly] = useState(false)
+  
 
   const [filters, setFilters] = useState({
     category: "",
@@ -60,6 +61,7 @@ export default function Menuu() {
   const [storeNotFound, setStoreNotFound] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [isAuthOpen, setIsAuthOpen] = useState(false)
+  const [isStoreOpen, setIsStoreOpen] = useState(true)
 
   // -------------------- REDUX --------------------
   const cartItems = useSelector(state => {
@@ -101,6 +103,18 @@ export default function Menuu() {
           name: outletCode,
           code: outletCode
         })
+
+        // 🎯 NEW: Ask the backend if THIS store is currently accepting orders!
+        try {
+            const storeRes = await api.get("/api/method/ultipos.api.store.get_stores")
+            const storesList = storeRes?.data?.message?.stores || []
+            const myStore = storesList.find(s => s.outlet_code === outletCode)
+            if (myStore) {
+                setIsStoreOpen(myStore.is_open)
+            }
+        } catch (e) {
+            console.error("Failed to fetch store status", e)
+        }
 
         const items = (data.categories || []).flatMap(cat =>
           (cat.items || []).map(i => {
@@ -146,6 +160,29 @@ export default function Menuu() {
     }
 
     loadMenu()
+  }, [outletCode])
+
+// -------------------- REAL-TIME STORE STATUS SYNC --------------------
+  useEffect(() => {
+    const fetchStoreStatus = async () => {
+      try {
+        // Added cache-buster
+        const storeRes = await api.get("/api/method/ultipos.api.store.get_stores?_t=" + Date.now())
+        const storesList = storeRes?.data?.message?.stores || []
+        const myStore = storesList.find(s => s.outlet_code === outletCode)
+        
+        if (myStore) {
+          setIsStoreOpen(myStore.is_open ?? true) 
+        }
+      } catch (e) {
+        console.error("Failed to fetch live store status", e)
+      }
+    }
+
+    fetchStoreStatus()
+    // 🎯 THE FIX: Keep checking the store status every 5 seconds!
+    const statusInterval = setInterval(fetchStoreStatus, 5000)
+    return () => clearInterval(statusInterval)
   }, [outletCode])
 
   // -------------------- FILTER --------------------
@@ -263,6 +300,13 @@ export default function Menuu() {
           cartItemsCount={getCartItemsCount()}
           onOpenCart={() => dispatch(setIsOpen(true))}
         />
+
+        {/* 🎯 NEW: Store Closed Banner */}
+      {!isStoreOpen && (
+        <div className="bg-red-500 text-white text-center py-3 px-4 font-bold text-sm shadow-md sticky top-[72px] z-30">
+           🚫 This store is currently not accepting new orders. You can browse the menu, but ordering is disabled.
+        </div>
+      )}
         
         {/* Mobile Horizontal Category Scroll (Replaces Sidebar on Mobile) */}
         <div className="md:hidden overflow-x-auto scrollbar-hide py-3 px-4 flex gap-2 border-t border-gray-100 bg-white">
@@ -312,14 +356,15 @@ export default function Menuu() {
             {filteredItems.map(item => (
               <div
                 key={item.id}
-                className="group bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex flex-col h-full"
+                // 🎯 Disable hover effects and add opacity if closed
+                className={`bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm transition-all duration-300 flex flex-col h-full ${!isStoreOpen ? 'opacity-80' : 'group hover:shadow-xl hover:-translate-y-1'}`}
               >
-                {/* Image Area */}
                 <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
                   <img
                     src={item.image ? getFileUrl(item.image) : "/placeholder.svg"}
                     alt={item.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    // 🎯 Grayscale the food if closed
+                    className={`w-full h-full object-cover transition-transform duration-500 ${!isStoreOpen ? 'grayscale' : 'group-hover:scale-110'}`}
                     onError={(e) => { e.currentTarget.src = "/placeholder.svg" }}
                   />
                   

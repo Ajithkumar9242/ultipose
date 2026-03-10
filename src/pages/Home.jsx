@@ -158,15 +158,13 @@ const Home = () => {
     )
   }
 
-  // ✅ LOAD MULTIPLE STORES
+// ✅ LOAD MULTIPLE STORES WITH REAL-TIME SYNC
   useEffect(() => {
     const loadStores = async () => {
       try {
-        const res = await api.get("/api/method/ultipos.api.store.get_stores")
-
-        // backend returns: { message: { stores: [...] } }
+        // Added cache-buster
+        const res = await api.get("/api/method/ultipos.api.store.get_stores?_t=" + Date.now())
         const list = res?.data?.message?.stores || []
-
         setStores(list)
       } catch (e) {
         console.error("Failed to load stores:", e)
@@ -176,6 +174,9 @@ const Home = () => {
     }
 
     loadStores()
+    // 🎯 THE FIX: Auto-refresh the store status every 5 seconds!
+    const intervalId = setInterval(loadStores, 5000)
+    return () => clearInterval(intervalId)
   }, [])
 
   // Manual address submit → geocode → set preview
@@ -564,7 +565,8 @@ const RestaurantCard = ({ data, onClick }) => (
       <img
         src={data.image}
         alt={data.name}
-        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+        // 🎯 THE FIX: Add grayscale filter if store is closed!
+        className={`w-full h-full object-cover transition-transform duration-500 ${!data.isOpen ? 'grayscale' : 'group-hover:scale-110'}`}
       />
       {!data.isOpen && (
         <div className="absolute inset-0 bg-black/60 flex items-center justify-center">

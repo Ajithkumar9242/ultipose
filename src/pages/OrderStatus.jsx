@@ -513,7 +513,9 @@ export default function OrderStatusPage() {
               if (storeCode) {
                 dispatch(clearCartForStore(storeCode))
                 localStorage.removeItem("cartSlice")
-                navigate(`/s/${storeCode}`)
+                // navigate(`/s/${storeCode}`)
+                navigate("/")
+
               } else {
                 navigate("/")
               }
