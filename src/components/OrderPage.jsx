@@ -30,7 +30,8 @@ export function OrderPage({
   onPlaceOrder,
   onPlaceOrderCOD,
   total,
-  placingOrder = false
+  placingOrder = false,
+  availableGateways = []
 }) {
   const [appliedCoupon, setAppliedCoupon] = useState(null)
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false)
@@ -689,36 +690,73 @@ const navigate = useNavigate()
               </div>
 
               {/* Make Payment */}
-              <div className="mt-8">
-                <Button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    handlePlaceOrderInternal()
-                  }}
-                  disabled={placingOrder || items.length === 0}
-                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-6 text-lg font-bold rounded-xl shadow-lg shadow-orange-200 transform transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:shadow-none"
-                >
-                  {placingOrder ? (
-                    <span className="flex items-center gap-2">
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Processing...
-                    </span>
-                  ) : (
-                    <div className="flex items-center justify-between w-full px-2">
-                      <span>Make Payment</span>
-                      <span className="bg-white/20 px-2 py-0.5 rounded text-sm">
-                        {formatPriceAUD(finalTotal)}
-                      </span>
-                    </div>
-                  )}
-                </Button>
+              {/* Make Payment */}
+              <div className="mt-8 space-y-3">
+                {/* 🎯 Dynamic Online Payment Buttons */}
+                {availableGateways.length > 0 ? (
+                  availableGateways.map((gateway) => {
+                    
+                    // Let's give them different colors so they look great!
+                    let btnColor = "from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 shadow-orange-200";
+                    if (gateway === "Stripe") btnColor = "from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 shadow-indigo-200";
+                    if (gateway === "Worldline") btnColor = "from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-blue-200";
+                    if (gateway === "Tyro") btnColor = "from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-emerald-200";
 
-                <p className="text-center text-[10px] text-gray-400 mt-3">
+                    return (
+                      <Button
+                        key={gateway}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          
+                          const orderDetails = {
+                            items,
+                            userDetails: effectiveUser,
+                            paymentMethod: "online",
+                            deliveryAddress: locationForStore.data || selectedAddress?.address || "No address",
+                            subtotal: computedTotal,
+                            tax: 0,
+                            discount,
+                            total: finalTotal,
+                            appliedCoupon: discount > 0 ? appliedCoupon : null,
+                            orderId: `MF${Date.now()}`,
+                            estimatedDelivery: "45-50 mins"
+                          };
+
+                          onPlaceOrder(orderDetails, gateway); // Pass the chosen gateway!
+                        }}
+                        disabled={placingOrder || items.length === 0}
+                        className={`w-full bg-gradient-to-r ${btnColor} text-white py-6 text-lg font-bold rounded-xl shadow-lg transform transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:shadow-none`}
+                      >
+                        {placingOrder ? (
+                          <span className="flex items-center gap-2">
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Processing...
+                          </span>
+                        ) : (
+                          <div className="flex items-center justify-between w-full px-2">
+                            <span>Pay with {gateway}</span>
+                            <span className="bg-white/20 px-2 py-0.5 rounded text-sm">
+                              {formatPriceAUD(finalTotal)}
+                            </span>
+                          </div>
+                        )}
+                      </Button>
+                    )
+                  })
+                ) : (
+                   <div className="text-center p-3 text-red-500 bg-red-50 rounded-lg text-sm font-bold border border-red-100">
+                     Card Payments Currently Offline
+                   </div>
+                )}
+
+                <p className="text-center text-[10px] text-gray-400 pt-2">
                   By proceeding, you agree to our Terms & Conditions
                 </p>
               </div>
+
+              
 
               {/* COD */}
               <div className="mt-3">

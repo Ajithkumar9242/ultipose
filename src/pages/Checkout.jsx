@@ -1,29 +1,25 @@
 // src/pages/Checkout.jsx
 "use client"
 
-import { useSelector } from "react-redux"
+import { useSelector, useDispatch } from "react-redux"
 import { useNavigate } from "react-router-dom"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { OrderPage } from "../components/OrderPage"
 import api from "../api/index"
 import { toast } from "react-hot-toast"
-import { useDispatch } from "react-redux"
 import { clearCartForStore } from "@/redux/store"
 
 export default function Checkout() {
   const navigate = useNavigate()
-  const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const dispatch = useDispatch()
-
-  // ✅ IMPORTANT: track placed order id
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [placedOrderId, setPlacedOrderId] = useState(null)
+  
+  // 🎯 NEW: State to hold the dynamic payment buttons
+  const [availableGateways, setAvailableGateways] = useState([])
 
   const currentStore = useSelector((state) => state.cart.currentStore)
-
-  const cartItems = useSelector((state) =>
-    currentStore ? state.cart.byStore[currentStore] || [] : []
-  )
-
+  const cartItems = useSelector((state) => currentStore ? state.cart.byStore[currentStore] || [] : [])
   const savedUser = useSelector((state) => {
     const byStore = state.user.byStore || {}
     return currentStore ? byStore[currentStore] || null : null
@@ -34,57 +30,47 @@ export default function Checkout() {
     return Number.isFinite(n) ? n : 0
   }
 
-  // ✅ IMPORTANT: these prices are CENTS already in your UI
-  // ✅ IMPORTANT: All prices in DOLLARS (same as Frappe)
-const itemsPayload = useMemo(() => {
-  return (cartItems || []).map((i) => {
-    const qty = toNumber(i.quantity || 1)
-
-    const base = toNumber(i.selectedVariant?.price ?? i.price ?? 0)
-
-    const addons = (i.selectedAddOns || []).reduce(
-      (s, a) => s + toNumber(a.price),
-      0
-    )
-
-    const mods = (i.selectedModifiers || []).reduce(
-      (s, m) => s + toNumber(m.price),
-      0
-    )
-
-    const unit_price = base + addons + mods
-    const total_price = unit_price * qty
-
-    return {
-      menu_item: i.foodItem?.id || i.id,
-      item_name: i.foodItem?.name || i.name,
-      qty,
-
-      // ✅ DOLLARS
-      unit_price,
-      total_price,
-
-      // ✅ VERY IMPORTANT: send these also
-      modifiers: i.selectedModifiers || [], // [{group,id,name,price}]
-      add_ons: i.selectedAddOns || [],      // optional
-      variant: i.selectedVariant || null,   // optional
-      note: i.specialInstructions || ""
+  // 🎯 NEW: Fetch which gateways the owner turned on!
+  useEffect(() => {
+    if (currentStore) {
+      api.get(`/api/method/ultipos.api.payment_gateways.get_active_gateways?outlet_code=${currentStore}`)
+        .then(res => {
+          if (res.data && res.data.message) {
+            setAvailableGateways(res.data.message)
+          }
+        })
+        .catch(err => console.error("Failed to fetch gateways", err))
     }
-  })
-}, [cartItems])
+  }, [currentStore])
 
+  const itemsPayload = useMemo(() => {
+    return (cartItems || []).map((i) => {
+      const qty = toNumber(i.quantity || 1)
+      const base = toNumber(i.selectedVariant?.price ?? i.price ?? 0)
+      const addons = (i.selectedAddOns || []).reduce((s, a) => s + toNumber(a.price), 0)
+      const mods = (i.selectedModifiers || []).reduce((s, m) => s + toNumber(m.price), 0)
+      const unit_price = base + addons + mods
+      const total_price = unit_price * qty
+
+      return {
+        menu_item: i.foodItem?.id || i.id,
+        item_name: i.foodItem?.name || i.name,
+        qty,
+        unit_price,
+        total_price,
+        modifiers: i.selectedModifiers || [], 
+        add_ons: i.selectedAddOns || [],      
+        variant: i.selectedVariant || null,   
+        note: i.specialInstructions || ""
+      }
+    })
+  }, [cartItems])
 
   const getCartTotal = () =>
     (cartItems || []).reduce((total, item) => {
       const base = toNumber(item.selectedVariant?.price ?? item.price ?? 0)
-      const addons = (item.selectedAddOns || []).reduce(
-        (s, a) => s + toNumber(a.price),
-        0
-      )
-      const mods = (item.selectedModifiers || []).reduce(
-        (s, m) => s + toNumber(m.price),
-        0
-      )
+      const addons = (item.selectedAddOns || []).reduce((s, a) => s + toNumber(a.price), 0)
+      const mods = (item.selectedModifiers || []).reduce((s, m) => s + toNumber(m.price), 0)
       return total + (base + addons + mods) * toNumber(item.quantity || 1)
     }, 0)
 
@@ -95,20 +81,13 @@ const itemsPayload = useMemo(() => {
 
   const clearStoreCartPersisted = (storeCode) => {
     try {
-      // 1) clear redux
       dispatch(clearCartForStore(storeCode))
-
-      // 2) clear localStorage instantly
       const raw = localStorage.getItem("cartSlice")
       if (raw) {
         const parsed = JSON.parse(raw)
-        if (parsed?.byStore?.[storeCode]) {
-          parsed.byStore[storeCode] = []
-        }
+        if (parsed?.byStore?.[storeCode]) parsed.byStore[storeCode] = []
         localStorage.setItem("cartSlice", JSON.stringify(parsed))
       }
-
-      // 3) remove notes
       localStorage.removeItem("itemNotes")
     } catch (e) {
       console.log("Cart clear error", e)
@@ -116,17 +95,9 @@ const itemsPayload = useMemo(() => {
   }
 
   // ---------------------- ONLINE PAYMENT ----------------------
-// ---------------------- ONLINE PAYMENT (STRIPE) ----------------------
-  const handleGoToPayment = async (orderDetails) => {
-    if (!itemsPayload.length) {
-      toast.error("Your cart is empty")
-      return
-    }
-
-    if (!currentStore) {
-      toast.error("Missing store information")
-      return
-    }
+  const handleGoToPayment = async (orderDetails, gatewayType) => {
+    if (!itemsPayload.length) return toast.error("Your cart is empty")
+    if (!currentStore) return toast.error("Missing store information")
 
     try {
       setIsPlacingOrder(true)
@@ -137,30 +108,14 @@ const itemsPayload = useMemo(() => {
         email: orderDetails?.userDetails?.email || savedUser?.email || ""
       }
 
-      if (!customerObj.phone) {
-        toast.error("Phone number required")
-        return
-      }
+      if (!customerObj.phone) return toast.error("Phone number required")
 
-      // ✅ 1) Create/update customer
-      const custRes = await api.post(
-        "/api/method/ultipos.api.checkout.create_or_update",
-        customerObj
-      )
-
+      const custRes = await api.post("/api/method/ultipos.api.checkout.create_or_update", customerObj)
       const customer_id = custRes?.data?.message?.customer_id
-      if (!customer_id) {
-        toast.error("Failed to create customer")
-        return
-      }
+      if (!customer_id) return toast.error("Failed to create customer")
 
-// 🎯 NEW: 2) Place the order FIRST so Stripe has an ID to attach to
-      const paymentObj = {
-        method: "Stripe",
-        transaction_id: null
-      }
+      const paymentObj = { method: gatewayType, transaction_id: null }
 
-      // We pack everything into ONE neat object first
       const orderPayload = {
         outlet_code: currentStore,
         customer_id: customer_id,
@@ -176,33 +131,26 @@ const itemsPayload = useMemo(() => {
         platform: "Web"
       }
 
-      // 🎯 THE FIX: We wrap the whole thing in "order_data" and stringify it, 
-      // exactly how your order.py script expects to receive it!
       const orderRes = await api.post("/api/method/ultipos.api.order.place", {
         order_data: JSON.stringify(orderPayload)
       })
 
       const orderData = orderRes?.data?.message
-      if (!orderData?.order_id) {
-        toast.error("Order failed: order_id missing")
-        return
-      }
+      if (!orderData?.order_id) return toast.error("Order failed: order_id missing")
 
-      // 🎯 NEW: 3) Ask backend for the Stripe Checkout URL
-      const stripeRes = await api.post("/api/method/ultipos.api.stripe_pay.create_checkout_session", {
-        order_id: orderData.order_id
+      // 🎯 THE FIX: Pass the specific gateway chosen by the user!
+      const gatewayRes = await api.post("/api/method/ultipos.api.payment_gateways.create_checkout_session", {
+        order_id: orderData.order_id,
+        gateway: gatewayType 
       })
 
-      const stripeData = stripeRes?.data?.message
+      const paymentData = gatewayRes?.data?.message
       
-      if (stripeData?.success && stripeData?.redirect_url) {
-        // Clear the cart because they are leaving our site to pay
+      if (paymentData?.success && paymentData?.redirect_url) {
         clearStoreCartPersisted(currentStore)
-        
-        // 🚀 4) SEND THEM TO STRIPE!
-        window.location.href = stripeData.redirect_url
+        window.location.href = paymentData.redirect_url
       } else {
-        toast.error("Failed to initialize payment gateway.")
+        toast.error(`Failed to initialize ${gatewayType}.`)
       }
 
     } catch (err) {
@@ -213,18 +161,11 @@ const itemsPayload = useMemo(() => {
     }
   }
 
-
   // ---------------------- Pay at counter ----------------------
   const handleGoToCOD = async (orderDetails) => {
-    if (!itemsPayload.length) {
-      toast.error("Your cart is empty")
-      return
-    }
-
-    if (!currentStore) {
-      toast.error("Missing store information")
-      return
-    }
+    // ... (Your COD logic remains exactly the same, no changes needed here) ...
+    if (!itemsPayload.length) return toast.error("Your cart is empty")
+    if (!currentStore) return toast.error("Missing store information")
 
     try {
       setIsPlacingOrder(true)
@@ -235,30 +176,14 @@ const itemsPayload = useMemo(() => {
         email: orderDetails?.userDetails?.email || savedUser?.email || ""
       }
 
-      if (!customerObj.phone) {
-        toast.error("Phone number required")
-        return
-      }
+      if (!customerObj.phone) return toast.error("Phone number required")
 
-      // ✅ create/update customer
-      const custRes = await api.post(
-        "/api/method/ultipos.api.checkout.create_or_update",
-        customerObj
-      )
-
+      const custRes = await api.post("/api/method/ultipos.api.checkout.create_or_update", customerObj)
       const customer_id = custRes?.data?.message?.customer_id
-      if (!customer_id) {
-        toast.error("Failed to create customer")
-        return
-      }
+      if (!customer_id) return toast.error("Failed to create customer")
 
-      // ✅ place COD order
-      const paymentObj = {
-        method: "COD",
-        transaction_id: null
-      }
+      const paymentObj = { method: "COD", transaction_id: null }
 
-      // 🎯 THE FIX: Pack it all into one object first
       const orderPayload = {
         outlet_code: currentStore,
         customer_id: customer_id,
@@ -274,25 +199,16 @@ const itemsPayload = useMemo(() => {
         platform: "Web"
       }
 
-      // 🎯 Wrap it in "order_data" and stringify, just like the Stripe fix!
       const orderRes = await api.post("/api/method/ultipos.api.order.place", {
         order_data: JSON.stringify(orderPayload)
       })
 
       const orderData = orderRes?.data?.message
-      if (!orderData?.order_id) {
-        toast.error("Order failed: order_id missing")
-        return
-      }
+      if (!orderData?.order_id) return toast.error("Order failed: order_id missing")
 
       toast.success("Order placed (COD) ✅")
-
-      // ✅ IMPORTANT: mark placed order id (prevents auto redirect)
       setPlacedOrderId(orderData.order_id)
-
       clearStoreCartPersisted(currentStore)
-
-      // ✅ go to order status
       navigate(`/order-status/${orderData.order_id}`)
     } catch (err) {
       console.error(err)
@@ -302,7 +218,6 @@ const itemsPayload = useMemo(() => {
     }
   }
 
-  // ✅ FIXED: don't redirect to home if order already placed
   if ((!cartItems || cartItems.length === 0) && !isPlacingOrder && !placedOrderId) {
     if (currentStore) navigate(`/s/${currentStore}`)
     else navigate("/")
@@ -319,6 +234,7 @@ const itemsPayload = useMemo(() => {
       placingOrder={isPlacingOrder}
       total={getCartTotal()}
       storeCode={currentStore}
+      availableGateways={availableGateways} // 🎯 NEW PROPS PASSED HERE!
     />
   )
 }
